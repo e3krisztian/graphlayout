@@ -3,7 +3,7 @@ debug = print
 # an incremental graph layout algorithm - prototype
 class Graph:
     def __init__(self, n):
-        self.n = n
+        self.nodecount = n
         self._edges = [[] for dummy in range(n)]
 
     def addedge(self, node1, node2):
@@ -13,15 +13,12 @@ class Graph:
     def edges(self, nodeindex):
         return self._edges[nodeindex]
 
-    def nodecount(self):
-        return self.n
-
 
 import math
 
 
 def circle_locations(graph):
-    n = graph.nodecount()
+    n = graph.nodecount
     locations = [None] * n
     for i in range(n):
         a = 2 * math.pi/n * i
@@ -43,7 +40,7 @@ class GraphLayout:
         self.graph = graph
         self.attrstrength = 1
         self.repustrength = 1
-        assert self.graph.nodecount() == len(locations)
+        assert self.graph.nodecount == len(locations)
         self.locations = locations
 
     def __str__(self):
