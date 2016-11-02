@@ -35,8 +35,6 @@ def randomized(locations):
 class GraphLayout:
     def __init__(self, graph, locations):
         self.graph = graph
-        self.attrstrength = 1
-        self.repustrength = 1
         assert self.graph.nodecount == len(locations)
         self.locations = locations
 
