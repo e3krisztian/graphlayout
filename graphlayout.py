@@ -17,35 +17,34 @@ class Graph:
         return self.n
 
 
-import math, random
+import math
+
+
+def circle_locations(graph):
+    n = graph.nodecount()
+    locations = [None] * n
+    for i in range(n):
+        a = 2 * math.pi/n * i
+        locations[i] = (n*math.cos(a), n*math.sin(a))
+    return locations
+
+
+import random
+
+
+def randomized(locations):
+    return [
+        (x * (random.random()*2/3 + 0.33), y * (random.random()*2/3 + 0.33))
+        for x, y in locations]
+
 
 class GraphLayout:
-    def __init__(self, graph, locations=None):
+    def __init__(self, graph, locations):
         self.graph = graph
         self.attrstrength = 1
         self.repustrength = 1
-        if locations:
-            assert self.graph.nodecount() == len(locations)
-            self._locations = locations
-        else:
-            self._locations = [None] * graph.nodecount()
-            self._initloc()
-
-    def clone(self):
-        return GraphLayout(self.graph, self._locations[:])
-
-    def _initloc(self):
-        n = self.nodecount()
-        for i in range(n):
-            a = 2 * math.pi/n * i
-            self._locations[i] = (n*math.cos(a), n*math.sin(a))
-
-    def randomize(self):
-        for i in range(self.nodecount()):
-            x, y = self._locations[i]
-            x = x * (random.random()*2/3 + 0.33)
-            y = y * (random.random()*2/3 + 0.33)
-            self._locations[i] = (x, y)
+        assert self.graph.nodecount() == len(locations)
+        self._locations = locations
 
     def nodecount(self):
         return len(self._locations)
@@ -247,15 +246,13 @@ canvas.create_line(0,500,800,0, fill = "red")
 def button(side, text, command):
     button = tkinter.Button(frame,text=text,command=command).pack(side=side)
 
+g = None
+
 def new_graph(graph):
     global g, t, n
-    g = GraphLayout(graph)
-    g.randomize()
+    g = GraphLayout(graph, randomized(circle_locations(graph)))
     t = 1
     n = 1
-
-g = GraphLayout(rings(10, 10))
-g.randomize()
 
 def exit_gui():
     global g
@@ -265,7 +262,7 @@ button(LEFT, "Exit", exit_gui)
 
 def randomize():
     global g
-    g.randomize()
+    g = GraphLayout(g.graph, randomized(g._locations))
 
 button(LEFT, "Randomize", randomize)
 
@@ -363,6 +360,7 @@ class GraphCanvas:
         glayout.draw(self, 400/self.magnification-x, 250/self.magnification-y)
 
 gcanvas = GraphCanvas(canvas)
+new_pipe()
 
 from time import sleep
 # main loop
