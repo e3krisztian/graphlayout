@@ -4,14 +4,11 @@ debug = print
 class Graph:
     def __init__(self, n):
         self.nodecount = n
-        self._edges = [[] for dummy in range(n)]
+        self.edges = [[] for dummy in range(n)]
 
     def addedge(self, node1, node2):
-        self._edges[node1].append(node2)
-        self._edges[node2].append(node1)
-
-    def edges(self, nodeindex):
-        return self._edges[nodeindex]
+        self.edges[node1].append(node2)
+        self.edges[node2].append(node1)
 
 
 import math
@@ -54,7 +51,7 @@ class GraphLayout:
         # draw edges
         for i in range(len(self.locations)):
             x1, y1 = self.locations[i]
-            for dest in self.graph.edges(i):
+            for dest in self.graph.edges[i]:
                 if i < dest:
                     x2, y2 = self.locations[dest]
                     canvas.drawline(x1+offx, y1+offy, x2+offx, y2+offy)
@@ -66,7 +63,7 @@ class GraphLayout:
             x, y = locations[node]
             dx, dy = ([], [])
             # calculate attraction - along the edges
-            for i in self.graph.edges(node):
+            for i in self.graph.edges[node]:
                 ox, oy = locations[i]
                 attrx, attry = self.attraction(ox - x, oy - y)
                 dx.append(attrx)
