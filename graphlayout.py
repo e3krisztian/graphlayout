@@ -44,28 +44,22 @@ class GraphLayout:
         self.attrstrength = 1
         self.repustrength = 1
         assert self.graph.nodecount() == len(locations)
-        self._locations = locations
-
-    def nodecount(self):
-        return len(self._locations)
-
-    def location(self, i):
-        return self._locations[i]
+        self.locations = locations
 
     def __str__(self):
-        return 'Graph: ' + str(self.graph) + '\n' + 'Layout: ' + str(self._locations)
+        return 'Graph: ' + str(self.graph) + '\n' + 'Layout: ' + str(self.locations)
 
     def draw(self, canvas, offx, offy):
         # draw nodes
-        for (x, y), n in zip(self._locations, range(len(self._locations))):
+        for (x, y), n in zip(self.locations, range(len(self.locations))):
             canvas.drawcircle(x + offx, y + offy, 2)
             canvas.write(x + offx, y + offy, n)
         # draw edges
-        for i in range(self.nodecount()):
-            x1, y1 = self._locations[i]
+        for i in range(len(self.locations)):
+            x1, y1 = self.locations[i]
             for dest in self.graph.edges(i):
                 if i < dest:
-                    x2, y2 = self._locations[dest]
+                    x2, y2 = self.locations[dest]
                     canvas.drawline(x1+offx, y1+offy, x2+offx, y2+offy)
 
     def delta(self, locations):
@@ -102,23 +96,23 @@ class GraphLayout:
         return newlocations
 
     def improveall(self, t):
-        delta = self.delta(self._locations)
+        delta = self.delta(self.locations)
         # avg distance2 between nodes
         # approximation: avg is calculated from the distances of the first node
-        x0, y0 = self._locations[0]
+        x0, y0 = self.locations[0]
         avg = sum([(x0 - x) * (x0 - x) + (y0 - y) * (y0 - y)
-            for x, y in self._locations]) / len(self._locations)
+            for x, y in self.locations]) / len(self.locations)
         # t = scale so that every delta < avg / 2
         maxdelta = max([x * x + y * y for x, y in delta])
         if maxdelta > avg / 2:
             ot = t
             t = t * avg / maxdelta
             debug('t was overridden: %f -> %f ' % (ot, t))
-        self._locations = self.adddelta(self._locations, delta, t)
+        self.locations = self.adddelta(self.locations, delta, t)
 
     def distance2(self, n1, n2):
-        x1, y1 = self.location(n1)
-        x2, y2 = self.location(n2)
+        x1, y1 = self.locations[n1]
+        x2, y2 = self.locations[n2]
         dx = x1-x2
         dy = y1-y2
         return dx * dx + dy * dy
@@ -262,7 +256,7 @@ button(LEFT, "Exit", exit_gui)
 
 def randomize():
     global g
-    g = GraphLayout(g.graph, randomized(g._locations))
+    g = GraphLayout(g.graph, randomized(g.locations))
 
 button(LEFT, "Randomize", randomize)
 
@@ -339,12 +333,11 @@ class GraphCanvas:
         self.canvasitems.append(self.canvas.create_rectangle(x0, y0, x1, y1, fill='yellow'))
         self.canvas.tag_raise(item)
 
-
     def draw(self, glayout):
         # recalculate magnification - to be able to draw the whole graph
-        x, y = glayout.location(0)
+        x, y = glayout.locations[0]
         maxdist = 0
-        for i in range(1, glayout.nodecount()):
+        for i in range(1, len(glayout.locations)):
             dist = glayout.distance(0, i)
             if dist > maxdist:
                 maxdist = dist
