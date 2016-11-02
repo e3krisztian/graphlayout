@@ -34,8 +34,8 @@ def randomized(locations):
 
 class GraphLayout:
     def __init__(self, graph, locations):
+        assert graph.nodecount == len(locations)
         self.graph = graph
-        assert self.graph.nodecount == len(locations)
         self.locations = locations
 
     def __str__(self):
@@ -76,9 +76,7 @@ class GraphLayout:
                     dy.append(repy)
 
             # set the new location
-            dx.sort(key=abs)
-            dy.sort(key=abs)
-            delta[node] = (sum(dx), sum(dy))
+            delta[node] = (math.fsum(dx), math.fsum(dy))
         return delta
 
     def adddelta(self, locations, delta, t):
@@ -92,7 +90,7 @@ class GraphLayout:
         # avg distance2 between nodes
         # approximation: avg is calculated from the distances of the first node
         x0, y0 = self.locations[0]
-        avg = sum([(x0 - x) * (x0 - x) + (y0 - y) * (y0 - y)
+        avg = math.fsum([(x0 - x) * (x0 - x) + (y0 - y) * (y0 - y)
             for x, y in self.locations]) / len(self.locations)
         # t = scale so that every delta < avg / 2
         maxdelta = max([x * x + y * y for x, y in delta])
