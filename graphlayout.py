@@ -1,8 +1,10 @@
+debug = print
+
 # an incremental graph layout algorithm - prototype
 class Graph:
     def __init__(self, n):
         self.n = n
-        self._edges = [[] for dummy in xrange(n)]
+        self._edges = [[] for dummy in range(n)]
 
     def addedge(self, node1, node2):
         self._edges[node1].append(node2)
@@ -34,12 +36,12 @@ class GraphLayout:
 
     def _initloc(self):
         n = self.nodecount()
-        for i in xrange(n):
+        for i in range(n):
             a = 2 * math.pi/n * i
             self._locations[i] = (n*math.cos(a), n*math.sin(a))
 
     def randomize(self):
-        for i in xrange(self.nodecount()):
+        for i in range(self.nodecount()):
             x, y = self._locations[i]
             x = x * (random.random()*2/3 + 0.33)
             y = y * (random.random()*2/3 + 0.33)
@@ -56,7 +58,7 @@ class GraphLayout:
 
     def draw(self, canvas, offx, offy):
         # draw nodes
-        for (x, y), n in zip(self._locations, xrange(len(self._locations))):
+        for (x, y), n in zip(self._locations, range(len(self._locations))):
             canvas.drawcircle(x + offx, y + offy, 2)
             canvas.write(x + offx, y + offy, n)
         # draw edges
@@ -70,7 +72,7 @@ class GraphLayout:
     def delta(self, locations):
         """locations -> change vectors"""
         delta = [None] * len(locations)
-        for node in xrange(len(locations)):
+        for node in range(len(locations)):
             x, y = locations[node]
             dx, dy = ([], [])
             # calculate attraction - along the edges
@@ -81,8 +83,8 @@ class GraphLayout:
                 dy.append(attry)
 
             # calculate repulsion - an effect of all other nodes
-            for i in xrange(len(locations)):
-                if i <> node:
+            for i in range(len(locations)):
+                if i != node:
                     ox, oy = locations[i]
                     repx, repy = self.repulsion(ox - x, oy - y)
                     dx.append(repx)
@@ -112,7 +114,7 @@ class GraphLayout:
         if maxdelta > avg / 2:
             ot = t
             t = t * avg / maxdelta
-            print 't was overridden: %f -> %f ' % (ot, t)
+            debug('t was overridden: %f -> %f ' % (ot, t))
         self._locations = self.adddelta(self._locations, delta, t)
 
     def distance2(self, n1, n2):
@@ -169,7 +171,7 @@ def permutation(n):
     x = [0] * n
     for i in range(n):
         x[i] = i
-    for step in range(n/2, 0, -1):
+    for step in range(n//2, 0, -1):
         for i in range(n):
             if random.random() > 0.5:
                 i2 = (i+step)%n
@@ -205,13 +207,13 @@ def g2():
 
 def star(n):
     g = Graph(n)
-    for i in xrange(n-1):
+    for i in range(n-1):
         g.addedge(n-1, i)
     return g
 
 def star2(n):
     g = star(n)
-    for i in xrange(n-2):
+    for i in range(n-2):
         g.addedge(n-2, i)
     return g
 
@@ -230,20 +232,20 @@ def rings(n, m):
 
 #--- GUI app code
 
-import Tkinter
-from Tkconstants import *
+import tkinter
+from tkinter.constants import *
 
-tk = Tkinter.Tk()
-frame = Tkinter.Frame(tk, relief=RIDGE, borderwidth=2)
+tk = tkinter.Tk()
+frame = tkinter.Frame(tk, relief=RIDGE, borderwidth=2)
 frame.pack(fill=BOTH,expand=1)
-canvas = Tkinter.Canvas(frame, width=800, height=500)
+canvas = tkinter.Canvas(frame, width=800, height=500)
 canvas.pack(fill=BOTH, expand=1)
 
 canvas.create_line(0,0,800,500, fill = "red")
 canvas.create_line(0,500,800,0, fill = "red")
 
 def button(side, text, command):
-    button = Tkinter.Button(frame,text=text,command=command).pack(side=side)
+    button = tkinter.Button(frame,text=text,command=command).pack(side=side)
 
 def new_graph(graph):
     global g, t, n
@@ -336,7 +338,7 @@ class GraphCanvas:
         self.canvas.move(item, x, y)
         self.canvasitems.append(item)
         x0, y0, x1, y1 = self.canvas.bbox(item)
-        print int(5*m), x1-x0, y1-y0
+        debug(int(5*m), x1-x0, y1-y0)
         self.canvasitems.append(self.canvas.create_rectangle(x0, y0, x1, y1, fill='yellow'))
         self.canvas.tag_raise(item)
 
@@ -368,7 +370,7 @@ t = 1
 n = 1
 while g:
     if n < 1200:
-        print 'n= %4d, t=%.5f, magnification=%.5f' % (n, t, gcanvas.magnification)
+        print('n= %4d, t=%.5f, magnification=%.5f' % (n, t, gcanvas.magnification))
         g.improveall(t)
         if n > 100:
             t = max(0, t - 0.001)
