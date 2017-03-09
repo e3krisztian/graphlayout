@@ -106,9 +106,12 @@ class GraphLayout:
         ymax = max(y for _, y in self.locations)
         return math.sqrt((xmax - xmin) ** 2 + (ymax - ymin) ** 2)
 
-
-def adddelta(locations, delta, t):
-    return [(x + dx * t, y + dy * t) for (x, y), (dx, dy) in zip(locations, delta)]
+    def step(self, t):
+        '''
+            create a new layout by applying delta to the current layout t times
+        '''
+        new_locations = [(x + dx * t, y + dy * t) for (x, y), (dx, dy) in zip(self.locations, self.delta)]
+        return GraphLayout(self.graph, new_locations)
 
 
 def improveall(layout, t):
@@ -123,8 +126,8 @@ def improveall(layout, t):
         ot = t
         t = t * avg / maxdelta
         debug('t was overridden: %f -> %f ' % (ot, t))
-    new_locations = adddelta(layout.locations, layout.delta, t)
-    return GraphLayout(layout.graph, new_locations)
+    return layout.step(t)
+
 
 #--- Graph creators
 
