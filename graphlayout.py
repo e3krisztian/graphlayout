@@ -6,7 +6,7 @@ debug = print
 class Graph:
     def __init__(self, n):
         self.nodecount = n
-        self.edges = [[] for dummy in range(n)]
+        self.edges = [[] for _ in range(n)]
 
     def addedge(self, node1, node2):
         self.edges[node1].append(node2)
@@ -71,16 +71,6 @@ class GraphLayout:
             # set the new location
             delta[node] = (math.fsum(dx), math.fsum(dy))
         return delta
-
-    def distance2(self, n1, n2):
-        x1, y1 = self.locations[n1]
-        x2, y2 = self.locations[n2]
-        dx = x1-x2
-        dy = y1-y2
-        return dx * dx + dy * dy
-
-    def distance(self, n1, n2):
-        return math.sqrt(self.distance2(n1, n2))
 
     def attraction(self, dx, dy):
         d = math.sqrt(dx * dx + dy * dy)
