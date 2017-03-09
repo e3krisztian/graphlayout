@@ -37,6 +37,8 @@ class GraphLayout:
         assert graph.nodecount == len(locations)
         self.graph = graph
         self.locations = locations
+        self.delta = self.calculate_delta()
+        self.tension = self.calculate_tension()
 
     def __str__(self):
         return 'Graph: ' + str(self.graph) + '\n' + 'Layout: ' + str(self.locations)
@@ -54,12 +56,14 @@ class GraphLayout:
                     x2, y2 = self.locations[dest]
                     canvas.drawline(x1+offx, y1+offy, x2+offx, y2+offy)
 
-    def delta(self, locations):
-        """locations -> change vectors"""
+    def calculate_tension(self):
+        return math.fsum(abs(dx) for dx, _ in self.delta) + math.fsum(abs(dy) for _, dy in self.delta)
+
+    def calculate_delta(self):
+        locations = self.locations
         delta = [None] * len(locations)
-        for node in range(len(locations)):
-            x, y = locations[node]
-            dx, dy = ([], [])
+        for node, (x, y) in enumerate(locations):
+            dx, dy = [], []
             # calculate attraction - along the edges
             for i in self.graph.edges[node]:
                 ox, oy = locations[i]
@@ -78,27 +82,6 @@ class GraphLayout:
             # set the new location
             delta[node] = (math.fsum(dx), math.fsum(dy))
         return delta
-
-    def adddelta(self, locations, delta, t):
-        newlocations = [(x + dx * t, y + dy * t)
-            for (x, y), (dx, dy)
-            in zip(locations, delta)]
-        return newlocations
-
-    def improveall(self, t):
-        delta = self.delta(self.locations)
-        # avg distance2 between nodes
-        # approximation: avg is calculated from the distances of the first node
-        x0, y0 = self.locations[0]
-        avg = math.fsum([(x0 - x) * (x0 - x) + (y0 - y) * (y0 - y)
-            for x, y in self.locations]) / len(self.locations)
-        # t = scale so that every delta < avg / 2
-        maxdelta = max([x * x + y * y for x, y in delta])
-        if maxdelta > avg / 2:
-            ot = t
-            t = t * avg / maxdelta
-            debug('t was overridden: %f -> %f ' % (ot, t))
-        self.locations = self.adddelta(self.locations, delta, t)
 
     def distance2(self, n1, n2):
         x1, y1 = self.locations[n1]
@@ -134,6 +117,26 @@ class GraphLayout:
             return (-dx / div, -dy / div)
         except:
             return (-random.random(), -random.random())
+
+
+def adddelta(locations, delta, t):
+    return [(x + dx * t, y + dy * t) for (x, y), (dx, dy) in zip(locations, delta)]
+
+
+def improveall(layout, t):
+    # avg distance2 between nodes
+    # approximation: avg is calculated from the distances of the first node
+    x0, y0 = layout.locations[0]
+    avg = math.fsum([(x0 - x) * (x0 - x) + (y0 - y) * (y0 - y)
+        for x, y in layout.locations]) / len(layout.locations)
+    # t = scale so that every delta < avg / 2
+    maxdelta = max([x * x + y * y for x, y in layout.delta])
+    if maxdelta > avg / 2:
+        ot = t
+        t = t * avg / maxdelta
+        debug('t was overridden: %f -> %f ' % (ot, t))
+    new_locations = adddelta(layout.locations, layout.delta, t)
+    return GraphLayout(layout.graph, new_locations)
 
 #--- Graph creators
 
@@ -319,7 +322,7 @@ class GraphCanvas:
         self.canvas.move(item, x, y)
         self.canvasitems.append(item)
         x0, y0, x1, y1 = self.canvas.bbox(item)
-        debug(int(5*m), x1-x0, y1-y0)
+        # debug(int(5*m), x1-x0, y1-y0)
         self.canvasitems.append(self.canvas.create_rectangle(x0, y0, x1, y1, fill='yellow'))
         self.canvas.tag_raise(item)
 
@@ -351,8 +354,8 @@ t = 1
 n = 1
 while g:
     if n < 1200:
-        print('n= %4d, t=%.5f, magnification=%.5f' % (n, t, gcanvas.magnification))
-        g.improveall(t)
+        print('n= %4d, t=%.5f, magnification=%.5f, tension=%.5f' % (n, t, gcanvas.magnification, g.tension))
+        g = improveall(g, t)
         if n > 100:
             t = max(0, t - 0.001)
         n = n + 1
