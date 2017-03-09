@@ -56,7 +56,9 @@ class GraphLayout:
             # calculate attraction - along the edges
             for i in self.graph.edges[node]:
                 ox, oy = locations[i]
-                attrx, attry = self.attraction(ox - x, oy - y)
+                # attrx, attry = self.attraction(ox - x, oy - y, edge_length=10)
+                attrx, attry = self.attraction(ox - x, oy - y, edge_length=2)
+                # attrx, attry = self.attraction(ox - x, oy - y, edge_length=random.randint(2, 40))
                 dx.append(attrx)
                 dy.append(attry)
 
@@ -72,11 +74,10 @@ class GraphLayout:
             delta[node] = (math.fsum(dx), math.fsum(dy))
         return delta
 
-    def attraction(self, dx, dy):
+    def attraction(self, dx, dy, edge_length):
         d = math.sqrt(dx * dx + dy * dy)
-        el = 10 # edge length
         try:
-            m = (d - el) / el / 2
+            m = (d - edge_length) / edge_length / 2
             return (m * dx / d, m * dy / d)
         except:
             return (random.random(), random.random())
