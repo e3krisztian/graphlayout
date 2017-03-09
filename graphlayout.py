@@ -80,7 +80,7 @@ class GraphLayout:
             m = (d - edge_length) / edge_length / 2
             return (m * dx / d, m * dy / d)
         except:
-            return (random.random(), random.random())
+            return 0.,0. # (random.random(), random.random())
 
     def repulsion(self, dx, dy):
         try:
@@ -127,6 +127,41 @@ def improveall(layout, t):
         t = t * avg / maxdelta
         debug('t was overridden: %f -> %f ' % (ot, t))
     return layout.step(t)
+
+
+def improveall(layout, t):
+    # find largest t that has less tension than the current layout, but greater than the previous one
+    n = 4
+    t_curr = 0
+    layout_curr = layout
+    t_next = 1.0
+    while n > 0:
+        layout_next = layout.step(t_next)
+
+        if layout_curr.tension <= layout_next.tension:
+            break
+
+        t_curr = t_next
+        t_next = t_next + t_next
+        layout_curr = layout_next
+        n -= 1
+
+    # bisect-find the best layout between
+    n = 4
+    while n > 0:
+        t_mid = (t_curr + t_next) / 2
+        layout_mid = layout.step(t_mid)
+        if layout_mid.tension <= layout_curr.tension:
+            layout_curr = layout_mid
+            t_curr = t_mid
+        else:
+            layout_next = layout_mid
+            t_next = t_mid
+        n -= 1
+
+    if t_curr == 0:
+        return layout_mid
+    return layout_curr
 
 
 #--- Graph creators
@@ -249,7 +284,7 @@ def randomize():
 button(LEFT, "Randomize", randomize)
 
 def new_tree():
-    new_graph(tree(40))
+    new_graph(tree(400))
 
 def new_random():
     new_graph(randomg(20, 50))
