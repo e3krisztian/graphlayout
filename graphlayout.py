@@ -107,6 +107,14 @@ class GraphLayout:
         except:
             return (-random.random(), -random.random())
 
+    @property
+    def approx_diameter(self):
+        xmin = min(x for x, _ in self.locations)
+        xmax = max(x for x, _ in self.locations)
+        ymin = min(y for _, y in self.locations)
+        ymax = max(y for _, y in self.locations)
+        return math.sqrt((xmax - xmin) ** 2 + (ymax - ymin) ** 2)
+
 
 def adddelta(locations, delta, t):
     return [(x + dx * t, y + dy * t) for (x, y), (dx, dy) in zip(locations, delta)]
@@ -320,18 +328,12 @@ class GraphCanvas:
         self.canvas.tag_raise(item)
 
     def draw(self, glayout):
-        # draw graph centered around its first node
         # recalculate magnification - to be able to draw the whole graph
-        x, y = glayout.locations[0]
-        maxdist = 0
-        for i in range(1, len(glayout.locations)):
-            dist = glayout.distance(0, i)
-            if dist > maxdist:
-                maxdist = dist
-        self.magnification = 250.0 / maxdist
-
+        self.magnification = 500.0 / glayout.approx_diameter
         self.clear()
 
+        # draw graph centered around its first node
+        x, y = glayout.locations[0]
         offx = 400/self.magnification-x
         offy = 250/self.magnification-y
         locations = glayout.locations
