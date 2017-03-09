@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 debug = print
 
 # an incremental graph layout algorithm - prototype
@@ -42,19 +44,6 @@ class GraphLayout:
 
     def __str__(self):
         return 'Graph: ' + str(self.graph) + '\n' + 'Layout: ' + str(self.locations)
-
-    def draw(self, canvas, offx, offy):
-        # draw nodes
-        for (x, y), n in zip(self.locations, range(len(self.locations))):
-            canvas.drawcircle(x + offx, y + offy, 2)
-            canvas.write(x + offx, y + offy, n)
-        # draw edges
-        for i in range(len(self.locations)):
-            x1, y1 = self.locations[i]
-            for dest in self.graph.edges[i]:
-                if i < dest:
-                    x2, y2 = self.locations[dest]
-                    canvas.drawline(x1+offx, y1+offy, x2+offx, y2+offy)
 
     def calculate_tension(self):
         return math.fsum(abs(dx) for dx, _ in self.delta) + math.fsum(abs(dy) for _, dy in self.delta)
@@ -218,8 +207,12 @@ def rings(n, m):
 
 #--- GUI app code
 
-import tkinter
-from tkinter.constants import *
+try:
+    import tkinter
+    from tkinter.constants import *
+except ImportError:
+    import Tkinter as tkinter
+    from Tkconstants import *
 
 tk = tkinter.Tk()
 frame = tkinter.Frame(tk, relief=RIDGE, borderwidth=2)
@@ -327,6 +320,7 @@ class GraphCanvas:
         self.canvas.tag_raise(item)
 
     def draw(self, glayout):
+        # draw graph centered around its first node
         # recalculate magnification - to be able to draw the whole graph
         x, y = glayout.locations[0]
         maxdist = 0
@@ -336,14 +330,28 @@ class GraphCanvas:
                 maxdist = dist
         self.magnification = 250.0 / maxdist
 
-        # draw graph centered around its first node
+        self.clear()
+
+        offx = 400/self.magnification-x
+        offy = 250/self.magnification-y
+        locations = glayout.locations
+        # draw nodes
+        for (x, y), n in zip(locations, range(len(locations))):
+            self.drawcircle(x + offx, y + offy, 2)
+            self.write(x + offx, y + offy, n)
+        # draw edges
+        for i in range(len(locations)):
+            x1, y1 = locations[i]
+            for dest in glayout.graph.edges[i]:
+                if i < dest:
+                    x2, y2 = locations[dest]
+                    self.drawline(x1+offx, y1+offy, x2+offx, y2+offy)
+
+    def clear(self):
         #  clear previous screen
         for ci in self.canvasitems:
             self.canvas.delete(ci)
         self.canvasitems = []
-
-        #  draw new content
-        glayout.draw(self, 400/self.magnification-x, 250/self.magnification-y)
 
 gcanvas = GraphCanvas(canvas)
 new_pipe()
