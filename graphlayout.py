@@ -13,6 +13,13 @@ class Graph:
         self.edges[node2].append(node1)
 
 
+def csum(list_of_complex_numbers):
+    assert isinstance(list_of_complex_numbers, list)
+    real = math.fsum(n.real for n in list_of_complex_numbers)
+    imag = math.fsum(n.imag for n in list_of_complex_numbers)
+    return real + 1j * imag
+
+
 import math
 
 
@@ -21,7 +28,7 @@ def circle_locations(graph):
     locations = [None] * n
     for i in range(n):
         a = 2 * math.pi/n * i
-        locations[i] = (n*math.cos(a), n*math.sin(a))
+        locations[i] = n*(math.cos(a) + 1j*math.sin(a))
     return locations
 
 
@@ -30,8 +37,8 @@ import random
 
 def randomized(locations):
     return [
-        (x * (random.random()*2/3 + 0.33), y * (random.random()*2/3 + 0.33))
-        for x, y in locations]
+        c * (random.random()*2/3 + 0.33 + 1j * (random.random()*2/3 + 0.33))
+        for c in locations]
 
 
 class GraphLayout:
@@ -46,45 +53,44 @@ class GraphLayout:
         return 'Graph: ' + str(self.graph) + '\n' + 'Layout: ' + str(self.locations)
 
     def calculate_tension(self):
-        return math.fsum(abs(dx) for dx, _ in self.delta) + math.fsum(abs(dy) for _, dy in self.delta)
+        return math.fsum(abs(d) for d in self.delta)
 
     def calculate_delta(self):
         locations = self.locations
         delta = [None] * len(locations)
-        for node, (x, y) in enumerate(locations):
-            dx, dy = [], []
+        for node, c in enumerate(locations):
+            d = []
             # calculate attraction - along the edges
             for i in self.graph.edges[node]:
-                ox, oy = locations[i]
+                oc = locations[i]
                 # attrx, attry = self.attraction(ox - x, oy - y, edge_length=10)
-                attrx, attry = self.attraction(ox - x, oy - y, edge_length=2)
+                attr = self.attraction(oc - c, edge_length=2)
                 # attrx, attry = self.attraction(ox - x, oy - y, edge_length=random.randint(2, 40))
-                dx.append(attrx)
-                dy.append(attry)
+                d.append(attr)
 
             # calculate repulsion - an effect of all other nodes
             for i in range(len(locations)):
                 if i != node:
-                    ox, oy = locations[i]
-                    repx, repy = self.repulsion(ox - x, oy - y)
-                    dx.append(repx)
-                    dy.append(repy)
+                    oc = locations[i]
+                    rep = self.repulsion(oc - c)
+                    d.append(rep)
 
             # set the new location
-            delta[node] = (math.fsum(dx), math.fsum(dy))
+            delta[node] = csum(d)
         return delta
 
-    def attraction(self, dx, dy, edge_length):
-        d = math.sqrt(dx * dx + dy * dy)
+    def attraction(self, dc, edge_length):
+        d = abs(dc)
         try:
             m = (d - edge_length) / edge_length / 2
-            return (m * dx / d, m * dy / d)
+            return m * dc / d
         except:
-            return 0.,0. # (random.random(), random.random())
+            return 0.
+            return random.random() + 1j * random.random()
 
-    def repulsion(self, dx, dy):
+    def repulsion(self, dc):
         try:
-            d2 = dx * dx + dy * dy
+            d2 = abs(dc) ** 2
             div = d2 / 2
             # for trees:
             # :either:
@@ -94,42 +100,28 @@ class GraphLayout:
             # el2 = 400 # (2 * edge length) ^ 2
             # if d2 > el2:
             #   return (0, 0)
-            return (-dx / div, -dy / div)
+            return -dc / div
+            return 0.
         except:
-            return (-random.random(), -random.random())
+            return -random.random() + 1j * -random.random()
 
     @property
     def approx_diameter(self):
-        xmin = min(x for x, _ in self.locations)
-        xmax = max(x for x, _ in self.locations)
-        ymin = min(y for _, y in self.locations)
-        ymax = max(y for _, y in self.locations)
-        return math.sqrt((xmax - xmin) ** 2 + (ymax - ymin) ** 2)
+        rmin = min(c.real for c in self.locations)
+        rmax = max(c.real for c in self.locations)
+        imin = min(c.imag for c in self.locations)
+        imax = max(c.imag for c in self.locations)
+        return math.sqrt((rmax - rmin) ** 2 + (imax - imin) ** 2)
 
     def step(self, t):
         '''
             create a new layout by applying delta to the current layout t times
         '''
-        new_locations = [(x + dx * t, y + dy * t) for (x, y), (dx, dy) in zip(self.locations, self.delta)]
+        new_locations = [c + d * t for c, d in zip(self.locations, self.delta)]
         return GraphLayout(self.graph, new_locations)
 
 
-def improveall(layout, t):
-    # avg distance2 between nodes
-    # approximation: avg is calculated from the distances of the first node
-    x0, y0 = layout.locations[0]
-    avg = math.fsum([(x0 - x) * (x0 - x) + (y0 - y) * (y0 - y)
-        for x, y in layout.locations]) / len(layout.locations)
-    # t = scale so that every delta < avg / 2
-    maxdelta = max([x * x + y * y for x, y in layout.delta])
-    if maxdelta > avg / 2:
-        ot = t
-        t = t * avg / maxdelta
-        debug('t was overridden: %f -> %f ' % (ot, t))
-    return layout.step(t)
-
-
-def improveall(layout, t):
+def improveall(layout):
     # find largest t that has less tension than the current layout, but greater than the previous one
     n = 4
     t_curr = 0
@@ -359,23 +351,29 @@ class GraphCanvas:
     def draw(self, glayout):
         # recalculate magnification - to be able to draw the whole graph
         self.magnification = 500.0 / glayout.approx_diameter
+        self.magnification = max(1., self.magnification)
+        self.magnification = min(50., self.magnification)
         self.clear()
 
         # draw graph centered around its first node
-        x, y = glayout.locations[0]
+        c = glayout.locations[0]
+        x, y = c.real, c.imag
         offx = 400/self.magnification-x
         offy = 250/self.magnification-y
         locations = glayout.locations
         # draw nodes
-        for (x, y), n in zip(locations, range(len(locations))):
+        for c, n in zip(locations, range(len(locations))):
+            x, y = c.real, c.imag
             self.drawcircle(x + offx, y + offy, 2)
             self.write(x + offx, y + offy, n)
         # draw edges
         for i in range(len(locations)):
-            x1, y1 = locations[i]
+            c1 = locations[i]
+            x1, y1 = c1.real, c1.imag
             for dest in glayout.graph.edges[i]:
                 if i < dest:
-                    x2, y2 = locations[dest]
+                    c2 = locations[dest]
+                    x2, y2 = c2.real, c2.imag
                     self.drawline(x1+offx, y1+offy, x2+offx, y2+offy)
 
     def clear(self):
@@ -389,14 +387,11 @@ new_pipe()
 
 from time import sleep
 # main loop
-t = 1
 n = 1
 while g:
     if n < 1200:
-        print('n= %4d, t=%.5f, magnification=%.5f, tension=%.5f' % (n, t, gcanvas.magnification, g.tension))
-        g = improveall(g, t)
-        if n > 100:
-            t = max(0, t - 0.001)
+        print('n= %4d, magnification=%.5f, tension=%.5f' % (n, gcanvas.magnification, g.tension))
+        g = improveall(g)
         n = n + 1
         gcanvas.draw(g)
     else:
