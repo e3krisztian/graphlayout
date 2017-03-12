@@ -278,6 +278,15 @@ button(LEFT, "Randomize", randomize)
 def new_tree():
     new_graph(tree(400))
 
+def new_tree40():
+    new_graph(tree(40))
+
+def new_tree100():
+    new_graph(tree(100))
+
+def new_tree200():
+    new_graph(tree(200))
+
 def new_random():
     new_graph(randomg(20, 50))
 
@@ -306,7 +315,9 @@ button(RIGHT, "g2", new_g2)
 button(RIGHT, "g1", new_g1)
 button(RIGHT, "Star", new_star)
 button(RIGHT, "Star2", new_star2)
-button(RIGHT, "Tree", new_tree)
+button(RIGHT, "T 200", new_tree200)
+button(RIGHT, "T 100", new_tree100)
+button(RIGHT, "T 40", new_tree40)
 button(RIGHT, "Random", new_random)
 button(RIGHT, "Complete", new_complete)
 button(RIGHT, "Ring", new_ring)
@@ -387,15 +398,12 @@ new_pipe()
 
 from time import sleep
 # main loop
-n = 1
 while g:
-    if n < 1200:
-        print('n= %4d, magnification=%.5f, tension=%.5f' % (n, gcanvas.magnification, g.tension))
-        g = improveall(g)
-        n = n + 1
-        gcanvas.draw(g)
-    else:
-        sleep(0.1)
+    print('n= %4d, magnification=%.5f, tension=%.5f' % (n, gcanvas.magnification, g.tension))
+    g = improveall(g)
+    n = n + 1
+    gcanvas.draw(g)
+    sleep(0.01)
     # update native window & process events
     canvas.update()
 
