@@ -17,7 +17,7 @@ def csum(list_of_complex_numbers):
     assert isinstance(list_of_complex_numbers, list)
     real = math.fsum(n.real for n in list_of_complex_numbers)
     imag = math.fsum(n.imag for n in list_of_complex_numbers)
-    return real + 1j * imag
+    return complex(real, imag)
 
 
 import math
@@ -28,7 +28,7 @@ def circle_locations(graph):
     locations = [None] * n
     for i in range(n):
         a = 2 * math.pi/n * i
-        locations[i] = n*(math.cos(a) + 1j*math.sin(a))
+        locations[i] = n*complex(math.cos(a), math.sin(a))
     return locations
 
 
@@ -37,7 +37,7 @@ import random
 
 def randomized(locations):
     return [
-        c * (random.random()*2/3 + 0.33 + 1j * (random.random()*2/3 + 0.33))
+        c * complex(random.random()*2/3 + 0.33, random.random()*2/3 + 0.33)
         for c in locations]
 
 
@@ -86,7 +86,7 @@ class GraphLayout:
             return m * dc / d
         except:
             return 0.
-            return random.random() + 1j * random.random()
+            return complex(random.random(), random.random())
 
     def repulsion(self, dc):
         try:
@@ -103,7 +103,7 @@ class GraphLayout:
             return -dc / div
             return 0.
         except:
-            return -random.random() + 1j * -random.random()
+            return complex(-random.random(), -random.random())
 
     @property
     def approx_diameter(self):
