@@ -52,67 +52,47 @@ class GraphLayout:
 
     def calculate_delta(self):
         locations = self.locations
+        edges = self.edges
         delta = [None] * len(locations)
-        for node, c in enumerate(locations):
-            d = []
+
+        for node, location in enumerate(locations):
             # calculate attraction - along the edges
-            for i in self.edges[node]:
-                oc = locations[i]
-                # attrx, attry = self.attraction(ox - x, oy - y, edge_length=10)
-                attr = self.attraction(oc - c, edge_length=2)
-                # attrx, attry = self.attraction(ox - x, oy - y, edge_length=random.randint(2, 40))
-                d.append(attr)
+            connected_locations = locations[edges[node]]
+            attraction = self.attraction(connected_locations - location)
 
             # calculate repulsion - an effect of all other nodes
-            for i in range(len(locations)):
-                if i != node:
-                    oc = locations[i]
-                    rep = self.repulsion(oc - c)
-                    d.append(rep)
+            repulsion = self.repulsion(locations - location)
 
             # set the new location
-            delta[node] = sum(d)
-        return delta
+            delta[node] = attraction + repulsion
+        return np.array(delta, dtype=np.complex128)
 
-    def attraction(self, dc, edge_length):
-        d = abs(dc)
-        try:
-            m = (d - edge_length) / edge_length / 2
-            return m * dc / d
-        except:
-            return 0.
-            return complex(random.random(), random.random())
+    def attraction(self, loc_deltas):
+        edge_length = 2
+        # edge_length = np.random.randint(2, 40, size=len(loc_deltas))
+        # edge_length = 10
+        distances = np.abs(loc_deltas)
+        attractions = (distances - edge_length) * loc_deltas / (2 * distances * edge_length)
+        return np.nansum(attractions)
 
-    def repulsion(self, dc):
-        try:
-            d2 = abs(dc) ** 2
-            div = d2 / 2
-            # for trees:
-            # :either:
-            # d3 = math.pow(d2, 1.5)
-            # div = d3 / 4
-            # :or:
-            # el2 = 400 # (2 * edge length) ^ 2
-            # if d2 > el2:
-            #   return (0, 0)
-            return -dc / div
-            return 0.
-        except:
-            return complex(-random.random(), -random.random())
+    def repulsion(self, loc_deltas):
+        distances = np.abs(loc_deltas)
+        repulsions = -2 * loc_deltas / distances ** 2
+        return np.nansum(repulsions)
 
     @property
     def approx_diameter(self):
-        rmin = min(c.real for c in self.locations)
-        rmax = max(c.real for c in self.locations)
-        imin = min(c.imag for c in self.locations)
-        imax = max(c.imag for c in self.locations)
+        rmin = np.min(self.locations.real)
+        rmax = np.max(self.locations.real)
+        imin = np.min(self.locations.imag)
+        imax = np.max(self.locations.imag)
         return math.sqrt((rmax - rmin) ** 2 + (imax - imin) ** 2)
 
     def step(self, t):
         '''
             create a new layout by applying delta to the current layout t times
         '''
-        new_locations = [c + d * t for c, d in zip(self.locations, self.delta)]
+        new_locations = self.locations + self.delta * t
         return GraphLayout(self.edges, new_locations)
 
 
@@ -303,8 +283,17 @@ def new_star2():
 def new_ring():
     new_graph(rings(20, 5))
 
+def new_ring_400():
+    new_graph(rings(40, 10))
+
 def new_pipe():
     new_graph(rings(10, 10))
+
+def new_pipe_400():
+    new_graph(rings(20, 20))
+
+def new_pipe_2000():
+    new_graph(rings(20, 100))
 
 button(RIGHT, "g2", new_g2)
 button(RIGHT, "g1", new_g1)
@@ -316,7 +305,10 @@ button(RIGHT, "T 40", new_tree40)
 button(RIGHT, "Random", new_random)
 button(RIGHT, "Complete", new_complete)
 button(RIGHT, "Ring", new_ring)
+button(RIGHT, "Ring400", new_ring_400)
 button(RIGHT, "Pipe", new_pipe)
+button(RIGHT, "Pipe400", new_pipe_400)
+button(RIGHT, "Pipe2000", new_pipe_2000)
 
 frame.pack()
 
