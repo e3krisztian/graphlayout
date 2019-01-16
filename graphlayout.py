@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+import numpy as np
+
 debug = print
 
 # an incremental graph layout algorithm - prototype
@@ -8,12 +10,12 @@ class Graph:
         self.nodecount = n
         self.edges = [[] for _ in range(n)]
 
-    def addedge(self, node1, node2):
+    def add_edge(self, node1, node2):
         self.edges[node1].append(node2)
         self.edges[node2].append(node1)
 
 
-def csum(list_of_complex_numbers):
+def complex_sum(list_of_complex_numbers):
     assert isinstance(list_of_complex_numbers, list)
     real = math.fsum(n.real for n in list_of_complex_numbers)
     imag = math.fsum(n.imag for n in list_of_complex_numbers)
@@ -42,15 +44,15 @@ def randomized(locations):
 
 
 class GraphLayout:
-    def __init__(self, graph, locations):
-        assert graph.nodecount == len(locations)
-        self.graph = graph
-        self.locations = locations
+    def __init__(self, edges, locations):
+        assert len(edges) == len(locations)
+        self.edges = [np.array(nodeindices, dtype=np.int64) for nodeindices in edges]
+        self.locations = np.array(locations, dtype=np.complex128)
         self.delta = self.calculate_delta()
         self.tension = self.calculate_tension()
 
     def __str__(self):
-        return 'Graph: ' + str(self.graph) + '\n' + 'Layout: ' + str(self.locations)
+        return 'Graph: ' + str(self.edges) + '\n' + 'Layout: ' + str(self.locations)
 
     def calculate_tension(self):
         return math.fsum(abs(d) for d in self.delta)
@@ -61,7 +63,7 @@ class GraphLayout:
         for node, c in enumerate(locations):
             d = []
             # calculate attraction - along the edges
-            for i in self.graph.edges[node]:
+            for i in self.edges[node]:
                 oc = locations[i]
                 # attrx, attry = self.attraction(ox - x, oy - y, edge_length=10)
                 attr = self.attraction(oc - c, edge_length=2)
@@ -76,7 +78,7 @@ class GraphLayout:
                     d.append(rep)
 
             # set the new location
-            delta[node] = csum(d)
+            delta[node] = complex_sum(d)
         return delta
 
     def attraction(self, dc, edge_length):
@@ -118,7 +120,7 @@ class GraphLayout:
             create a new layout by applying delta to the current layout t times
         '''
         new_locations = [c + d * t for c, d in zip(self.locations, self.delta)]
-        return GraphLayout(self.graph, new_locations)
+        return GraphLayout(self.edges, new_locations)
 
 
 def improveall(layout):
@@ -162,13 +164,13 @@ def completegraph(n):
     g = Graph(n)
     for i in range(n):
         for j in range(i+1, n):
-            g.addedge(i, j)
+            g.add_edge(i, j)
     return g
 
 def tree(n):
     g = Graph(n)
     for i in range(1, n):
-        g.addedge(i, int(i * random.random()))
+        g.add_edge(i, int(i * random.random()))
     return g
 
 def permutation(n):
@@ -187,38 +189,38 @@ def permutation(n):
 def randomg(n, e):
     g = Graph(n)
     for i in range(e):
-        g.addedge(int(n * random.random()), int(n * random.random()))
+        g.add_edge(int(n * random.random()), int(n * random.random()))
     return g
 
 def g1():
     g = Graph(10)
-    g.addedge(1,5)
-    g.addedge(2,5)
-    g.addedge(3,7)
-    g.addedge(3,8)
-    g.addedge(4,6)
-    g.addedge(4,9)
-    g.addedge(4,5)
-    g.addedge(5,6)
-    g.addedge(1,8)
-    g.addedge(0,8)
+    g.add_edge(1,5)
+    g.add_edge(2,5)
+    g.add_edge(3,7)
+    g.add_edge(3,8)
+    g.add_edge(4,6)
+    g.add_edge(4,9)
+    g.add_edge(4,5)
+    g.add_edge(5,6)
+    g.add_edge(1,8)
+    g.add_edge(0,8)
     return g
 
 def g2():
     g = g1()
-    g.addedge(9, 7)
+    g.add_edge(9, 7)
     return g
 
 def star(n):
     g = Graph(n)
     for i in range(n-1):
-        g.addedge(n-1, i)
+        g.add_edge(n-1, i)
     return g
 
 def star2(n):
     g = star(n)
     for i in range(n-2):
-        g.addedge(n-2, i)
+        g.add_edge(n-2, i)
     return g
 
 def rings(n, m):
@@ -228,10 +230,10 @@ def rings(n, m):
     for r in range(m):
         r0 = r*n
         for i in range(n):
-            g.addedge(p[r0 + i], p[r0 + (i+1) % n])
+            g.add_edge(p[r0 + i], p[r0 + (i+1) % n])
         if r > 0:
             for i in range(n):
-                g.addedge(p[r0-n +i], p[r0 + i])
+                g.add_edge(p[r0-n +i], p[r0 + i])
     return g
 
 #--- GUI app code
@@ -259,7 +261,7 @@ g = None
 
 def new_graph(graph):
     global g, t, n
-    g = GraphLayout(graph, randomized(circle_locations(graph)))
+    g = GraphLayout(graph.edges, randomized(circle_locations(graph)))
     t = 1
     n = 1
 
@@ -271,7 +273,7 @@ button(LEFT, "Exit", exit_gui)
 
 def randomize():
     global g
-    g = GraphLayout(g.graph, randomized(g.locations))
+    g = GraphLayout(g.edges, randomized(g.locations))
 
 button(LEFT, "Randomize", randomize)
 
@@ -381,7 +383,7 @@ class GraphCanvas:
         for i in range(len(locations)):
             c1 = locations[i]
             x1, y1 = c1.real, c1.imag
-            for dest in glayout.graph.edges[i]:
+            for dest in glayout.edges[i]:
                 if i < dest:
                     c2 = locations[dest]
                     x2, y2 = c2.real, c2.imag
