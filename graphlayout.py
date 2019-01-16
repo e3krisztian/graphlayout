@@ -48,7 +48,7 @@ class GraphLayout:
         return 'Graph: ' + str(self.edges) + '\n' + 'Layout: ' + str(self.locations)
 
     def calculate_tension(self):
-        return math.fsum(abs(d) for d in self.delta)
+        return np.abs(self.delta).sum()
 
     def calculate_delta(self):
         locations = self.locations
