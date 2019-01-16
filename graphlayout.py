@@ -15,13 +15,6 @@ class Graph:
         self.edges[node2].append(node1)
 
 
-def complex_sum(list_of_complex_numbers):
-    assert isinstance(list_of_complex_numbers, list)
-    real = math.fsum(n.real for n in list_of_complex_numbers)
-    imag = math.fsum(n.imag for n in list_of_complex_numbers)
-    return complex(real, imag)
-
-
 import math
 
 
@@ -78,7 +71,7 @@ class GraphLayout:
                     d.append(rep)
 
             # set the new location
-            delta[node] = complex_sum(d)
+            delta[node] = sum(d)
         return delta
 
     def attraction(self, dc, edge_length):
