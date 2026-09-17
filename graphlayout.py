@@ -2,6 +2,27 @@ from __future__ import print_function
 
 import numpy as np
 
+# Coordinate array conventions used throughout this file:
+#   A single point is a (2,) float64 array: [x, y].
+#   `locations` and `delta` on GraphLayout are (n, 2) float64 arrays,
+#   one row per node - row i is node i's [x, y].
+#   A batch of deltas (e.g. loc_deltas in attraction/repulsion) is (k, 2):
+#   k vectors, each a [x, y] pair.
+# Axis/column name constants, so indices read as names instead of bare 0/1:
+X, Y = 0, 1                # column index into a (k, 2) array: point[:, X] / point[:, Y]
+NODES, COORDINATES = 0, 1  # axis index for reductions over a (k, 2) array
+
+
+def assert_locations_shape(array, *, length=None):
+    assert array.ndim == 2 and array.shape[1] == 2
+    if length is not None:
+        assert array.shape[0] == length
+
+
+def assert_point_shape(array):
+    assert array.shape == (2,)
+
+
 debug = print
 
 # an incremental graph layout algorithm - prototype
@@ -23,7 +44,7 @@ def circle_locations(graph):
     locations = [None] * n
     for i in range(n):
         a = 2 * math.pi/n * i
-        locations[i] = n*complex(math.cos(a), math.sin(a))
+        locations[i] = [n * math.cos(a), n * math.sin(a)]
     return locations
 
 
@@ -31,16 +52,17 @@ import random
 
 
 def randomized(locations):
-    return [
-        c * complex(random.random()*2/3 + 0.33, random.random()*2/3 + 0.33)
-        for c in locations]
+    locations = np.asarray(locations, dtype=np.float64)
+    scale = np.random.random(locations.shape) * 2/3 + 0.33
+    return locations * scale
 
 
 class GraphLayout:
     def __init__(self, edges, locations):
         assert len(edges) == len(locations)
         self.edges = [np.array(nodeindices, dtype=np.int64) for nodeindices in edges]
-        self.locations = np.array(locations, dtype=np.complex128)
+        self.locations = np.array(locations, dtype=np.float64)
+        assert_locations_shape(self.locations, length=len(edges))
         self.delta = self.calculate_delta()
         self.tension = self.calculate_tension()
 
@@ -48,10 +70,11 @@ class GraphLayout:
         return 'Graph: ' + str(self.edges) + '\n' + 'Layout: ' + str(self.locations)
 
     def calculate_tension(self):
-        return np.abs(self.delta).sum()
+        return np.linalg.norm(self.delta, axis=COORDINATES).sum()
 
     def calculate_delta(self):
         locations = self.locations
+        assert_locations_shape(locations, length=len(self.edges))
         edges = self.edges
         delta = [None] * len(locations)
 
@@ -65,28 +88,41 @@ class GraphLayout:
 
             # set the new location
             delta[node] = attraction + repulsion
-        return np.array(delta, dtype=np.complex128)
+        result = np.array(delta, dtype=np.float64)
+        assert_locations_shape(result, length=len(self.edges))
+        return result
 
     def attraction(self, loc_deltas):
+        assert_locations_shape(loc_deltas)
         edge_length = 2
         # edge_length = np.random.randint(2, 40, size=len(loc_deltas))
         # edge_length = 10
-        distances = np.abs(loc_deltas)
-        attractions = (distances - edge_length) * loc_deltas / (2 * distances * edge_length)
-        return np.nansum(attractions)
+        distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
+        distances_column = np.expand_dims(distances, axis=COORDINATES)
+        attractions = (
+            (distances_column - edge_length) * loc_deltas
+            / (2 * distances_column * edge_length)
+        )
+        result = np.nansum(attractions, axis=NODES)
+        assert_point_shape(result)
+        return result
 
     def repulsion(self, loc_deltas):
-        distances = np.abs(loc_deltas)
-        repulsions = -2 * loc_deltas / distances ** 2
-        return np.nansum(repulsions)
+        assert_locations_shape(loc_deltas)
+        distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
+        distances_column = np.expand_dims(distances, axis=COORDINATES)
+        repulsions = -2 * loc_deltas / distances_column ** 2
+        result = np.nansum(repulsions, axis=NODES)
+        assert_point_shape(result)
+        return result
 
     @property
     def approx_diameter(self):
-        rmin = np.min(self.locations.real)
-        rmax = np.max(self.locations.real)
-        imin = np.min(self.locations.imag)
-        imax = np.max(self.locations.imag)
-        return math.sqrt((rmax - rmin) ** 2 + (imax - imin) ** 2)
+        xmin = np.min(self.locations[:, X])
+        xmax = np.max(self.locations[:, X])
+        ymin = np.min(self.locations[:, Y])
+        ymax = np.max(self.locations[:, Y])
+        return math.sqrt((xmax - xmin) ** 2 + (ymax - ymin) ** 2)
 
     def step(self, t):
         '''
@@ -213,16 +249,14 @@ def rings(n, m):
 
 try:
     import tkinter
-    from tkinter.constants import *
 except ImportError:
     import Tkinter as tkinter
-    from Tkconstants import *
 
 tk = tkinter.Tk()
-frame = tkinter.Frame(tk, relief=RIDGE, borderwidth=2)
-frame.pack(fill=BOTH,expand=1)
+frame = tkinter.Frame(tk, relief=tkinter.RIDGE, borderwidth=2)
+frame.pack(fill=tkinter.BOTH,expand=1)
 canvas = tkinter.Canvas(frame, width=800, height=500)
-canvas.pack(fill=BOTH, expand=1)
+canvas.pack(fill=tkinter.BOTH, expand=1)
 
 canvas.create_line(0,0,800,500, fill = "red")
 canvas.create_line(0,500,800,0, fill = "red")
@@ -242,13 +276,13 @@ def exit_gui():
     global g
     g = None
 
-button(LEFT, "Exit", exit_gui)
+button(tkinter.LEFT, "Exit", exit_gui)
 
 def randomize():
     global g
     g = GraphLayout(g.edges, randomized(g.locations))
 
-button(LEFT, "Randomize", randomize)
+button(tkinter.LEFT, "Randomize", randomize)
 
 def new_tree():
     new_graph(tree(400))
@@ -295,20 +329,20 @@ def new_pipe_400():
 def new_pipe_2000():
     new_graph(rings(20, 100))
 
-button(RIGHT, "g2", new_g2)
-button(RIGHT, "g1", new_g1)
-button(RIGHT, "Star", new_star)
-button(RIGHT, "Star2", new_star2)
-button(RIGHT, "T 200", new_tree200)
-button(RIGHT, "T 100", new_tree100)
-button(RIGHT, "T 40", new_tree40)
-button(RIGHT, "Random", new_random)
-button(RIGHT, "Complete", new_complete)
-button(RIGHT, "Ring", new_ring)
-button(RIGHT, "Ring400", new_ring_400)
-button(RIGHT, "Pipe", new_pipe)
-button(RIGHT, "Pipe400", new_pipe_400)
-button(RIGHT, "Pipe2000", new_pipe_2000)
+button(tkinter.RIGHT, "g2", new_g2)
+button(tkinter.RIGHT, "g1", new_g1)
+button(tkinter.RIGHT, "Star", new_star)
+button(tkinter.RIGHT, "Star2", new_star2)
+button(tkinter.RIGHT, "T 200", new_tree200)
+button(tkinter.RIGHT, "T 100", new_tree100)
+button(tkinter.RIGHT, "T 40", new_tree40)
+button(tkinter.RIGHT, "Random", new_random)
+button(tkinter.RIGHT, "Complete", new_complete)
+button(tkinter.RIGHT, "Ring", new_ring)
+button(tkinter.RIGHT, "Ring400", new_ring_400)
+button(tkinter.RIGHT, "Pipe", new_pipe)
+button(tkinter.RIGHT, "Pipe400", new_pipe_400)
+button(tkinter.RIGHT, "Pipe2000", new_pipe_2000)
 
 frame.pack()
 
@@ -355,23 +389,23 @@ class GraphCanvas:
 
         # draw graph centered around its first node
         c = glayout.locations[0]
-        x, y = c.real, c.imag
+        x, y = c[X], c[Y]
         offx = 400/self.magnification-x
         offy = 250/self.magnification-y
         locations = glayout.locations
         # draw nodes
         for c, n in zip(locations, range(len(locations))):
-            x, y = c.real, c.imag
+            x, y = c[X], c[Y]
             self.drawcircle(x + offx, y + offy, 2)
             self.write(x + offx, y + offy, n)
         # draw edges
         for i in range(len(locations)):
             c1 = locations[i]
-            x1, y1 = c1.real, c1.imag
+            x1, y1 = c1[X], c1[Y]
             for dest in glayout.edges[i]:
                 if i < dest:
                     c2 = locations[dest]
-                    x2, y2 = c2.real, c2.imag
+                    x2, y2 = c2[X], c2[Y]
                     self.drawline(x1+offx, y1+offy, x2+offx, y2+offy)
 
     def clear(self):
