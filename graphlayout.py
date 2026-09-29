@@ -155,7 +155,7 @@ def accept_layout_step(current_tension, candidate_tension, temperature):
 
 
 def improveall(layout, temperature=0.0):
-    # find largest t that has less tension than the current layout, but greater than the previous one
+    # double t while the step is accepted (Metropolis criterion at the given temperature)
     n = 4
     t_curr = 0
     layout_curr = layout
@@ -180,7 +180,6 @@ def improveall(layout, temperature=0.0):
             layout_curr = layout_mid
             t_curr = t_mid
         else:
-            layout_next = layout_mid
             t_next = t_mid
         n -= 1
 
