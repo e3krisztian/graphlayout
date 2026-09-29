@@ -84,7 +84,7 @@ class GraphLayout:
             attraction = self.attraction(connected_locations - location)
 
             # calculate repulsion - an effect of all other nodes
-            repulsion = self.repulsion(locations - location)
+            repulsion = self.repulsion(locations - location, node)
 
             # set the new location
             delta[node] = attraction + repulsion
@@ -107,9 +107,12 @@ class GraphLayout:
         assert_point_shape(result)
         return result
 
-    def repulsion(self, loc_deltas):
+    def repulsion(self, loc_deltas, node):
         assert_locations_shape(loc_deltas)
         distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
+        # loc_deltas[node] is the node's delta to itself, [0, 0]: a non-zero
+        # distance turns its term into 0 instead of 0/0, without copying the array
+        distances[node] = 1
         distances_column = np.expand_dims(distances, axis=COORDINATES)
         repulsions = -2 * loc_deltas / distances_column ** 2
         result = np.nansum(repulsions, axis=NODES)
