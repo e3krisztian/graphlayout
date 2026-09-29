@@ -132,6 +132,15 @@ class GraphLayout:
         return GraphLayout(self.edges, new_locations)
 
 
+def target_temperature(layout, iteration):
+    '''
+        Temperature to aim for at a given point in the layout process.
+        Currently based only on the layout's tension; iteration is
+        accepted for future use (e.g. an explicit cooling schedule).
+    '''
+    return layout.tension / 100.0
+
+
 def accept_layout_step(current_tension, candidate_tension, temperature):
     '''
         Metropolis criterion: always accept an improvement; accept a worse
@@ -278,10 +287,11 @@ def button(side, text, command):
 g = None
 
 def new_graph(graph):
-    global g, t, n
+    global g, t, n, temperature
     g = GraphLayout(graph.edges, randomized(circle_locations(graph)))
     t = 1
     n = 1
+    temperature = target_temperature(g, n)
 
 def exit_gui():
     global g
@@ -290,8 +300,10 @@ def exit_gui():
 button(tkinter.LEFT, "Exit", exit_gui)
 
 def randomize():
-    global g
+    global g, n, temperature
     g = GraphLayout(g.edges, randomized(g.locations))
+    n = 1
+    temperature = target_temperature(g, n)
 
 button(tkinter.LEFT, "Randomize", randomize)
 
@@ -431,7 +443,7 @@ new_pipe()
 from time import sleep
 # main loop
 while g:
-    temperature = 1.0 / n
+    temperature = min(temperature, target_temperature(g, n))
     print('n= %4d, magnification=%.5f, tension=%.5f, temperature=%.5f' % (n, gcanvas.magnification, g.tension, temperature))
     g = improveall(g, temperature)
     n = n + 1
