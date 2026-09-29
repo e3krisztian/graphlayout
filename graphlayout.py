@@ -132,7 +132,20 @@ class GraphLayout:
         return GraphLayout(self.edges, new_locations)
 
 
-def improveall(layout):
+def accept_layout_step(current_tension, candidate_tension, temperature):
+    '''
+        Metropolis criterion: always accept an improvement; accept a worse
+        candidate with probability exp(-delta_tension / temperature), so
+        temperature <= 0 recovers strict (never accept worse) behavior.
+    '''
+    if candidate_tension <= current_tension:
+        return True
+    if temperature <= 0:
+        return False
+    return random.random() < math.exp(-(candidate_tension - current_tension) / temperature)
+
+
+def improveall(layout, temperature=0.0):
     # find largest t that has less tension than the current layout, but greater than the previous one
     n = 4
     t_curr = 0
@@ -141,7 +154,7 @@ def improveall(layout):
     while n > 0:
         layout_next = layout.step(t_next)
 
-        if layout_curr.tension <= layout_next.tension:
+        if not accept_layout_step(layout_curr.tension, layout_next.tension, temperature):
             break
 
         t_curr = t_next
@@ -154,7 +167,7 @@ def improveall(layout):
     while n > 0:
         t_mid = (t_curr + t_next) / 2
         layout_mid = layout.step(t_mid)
-        if layout_mid.tension <= layout_curr.tension:
+        if accept_layout_step(layout_curr.tension, layout_mid.tension, temperature):
             layout_curr = layout_mid
             t_curr = t_mid
         else:
@@ -162,8 +175,6 @@ def improveall(layout):
             t_next = t_mid
         n -= 1
 
-    if t_curr == 0:
-        return layout_mid
     return layout_curr
 
 
@@ -420,8 +431,9 @@ new_pipe()
 from time import sleep
 # main loop
 while g:
-    print('n= %4d, magnification=%.5f, tension=%.5f' % (n, gcanvas.magnification, g.tension))
-    g = improveall(g)
+    temperature = 1.0 / n
+    print('n= %4d, magnification=%.5f, tension=%.5f, temperature=%.5f' % (n, gcanvas.magnification, g.tension, temperature))
+    g = improveall(g, temperature)
     n = n + 1
     gcanvas.draw(g)
     sleep(0.01)
