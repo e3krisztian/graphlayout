@@ -1,4 +1,6 @@
-from graphs import pipe
+import pytest
+
+from graphs import cube, dodecahedron, icosahedron, octahedron, pipe, tetrahedron
 
 
 def degrees(graph):
@@ -84,3 +86,19 @@ def test_closing_a_single_circle_adds_no_self_loops():
     ring = pipe(3, 1, closed=True)
     assert is_simple(ring)
     assert degrees(ring) == [2, 2, 2]
+
+
+@pytest.mark.parametrize("solid, nodecount, edgecount, degree", [
+    (tetrahedron, 4, 6, 3),
+    (cube, 8, 12, 3),
+    (octahedron, 6, 12, 4),
+    (dodecahedron, 20, 30, 3),
+    (icosahedron, 12, 30, 5),
+])
+def test_platonic_solid(solid, nodecount, edgecount, degree):
+    graph = solid()
+    assert graph.nodecount == nodecount
+    assert edge_count(graph) == edgecount
+    assert degrees(graph) == [degree] * nodecount
+    assert is_simple(graph)
+    assert is_connected(graph)

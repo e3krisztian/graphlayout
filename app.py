@@ -8,7 +8,9 @@ from time import sleep
 
 import numpy as np
 
-from graphs import completegraph, tree, randomg, g1, g2, star, star2, pipe
+from graphs import (
+    completegraph, tree, randomg, g1, g2, star, star2, pipe,
+    tetrahedron, cube, octahedron, dodecahedron, icosahedron)
 from layout import (
     X, Y, NODES, COORDINATES,
     GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin,
@@ -274,6 +276,13 @@ GRAPH_GROUPS = [
         ("Star", lambda: star(50)),
         ("Star2", lambda: star2(50)),
         ("Complete", lambda: completegraph(40)),
+    ]),
+    ("Platonic", 3, [
+        ("Tetra", tetrahedron),
+        ("Cube", cube),
+        ("Octa", octahedron),
+        ("Dodeca", dodecahedron),
+        ("Icosa", icosahedron),
     ]),
     ("Trees", 2, [
         ("T 40", lambda: tree(40)),

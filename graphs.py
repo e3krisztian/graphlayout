@@ -99,3 +99,56 @@ def pipe(nodes_per_circle, length, closed=False):
         for i in range(n):
             g.add_edge(p[r0 + i], p[r1 + i])
     return g
+
+# the graphs of the platonic solids: the vertices and the edges of the solid
+
+def tetrahedron():
+    return completegraph(4)
+
+def cube():
+    'the 3 dimensional hypercube: nodes differing in a single bit are linked'
+    g = Graph(8)
+    for i in range(8):
+        for bit in range(3):
+            j = i ^ (1 << bit)
+            if i < j:
+                g.add_edge(i, j)
+    return g
+
+def octahedron():
+    'every node linked to all the others, except to its opposite'
+    g = Graph(6)
+    for i in range(6):
+        for j in range(i+1, 6):
+            if j != i + 3:
+                g.add_edge(i, j)
+    return g
+
+def dodecahedron():
+    '''
+        the generalized Petersen graph GP(10, 2):
+        an outer ring of 10 nodes, each linked to a node of an inner ring,
+        where the inner nodes are linked to the ones 2 steps further
+    '''
+    g = Graph(20)
+    for i in range(10):
+        g.add_edge(i, (i+1) % 10)
+        g.add_edge(i, 10 + i)
+        g.add_edge(10 + i, 10 + (i+2) % 10)
+    return g
+
+def icosahedron():
+    '''
+        a top node above an upper ring of 5, a lower ring of 5 below it, a bottom node below that;
+        each upper ring node is linked to the 2 closest lower ring nodes
+    '''
+    top, upper, lower, bottom = 0, 1, 6, 11
+    g = Graph(12)
+    for i in range(5):
+        g.add_edge(top, upper + i)
+        g.add_edge(upper + i, upper + (i+1) % 5)
+        g.add_edge(upper + i, lower + i)
+        g.add_edge(upper + i, lower + (i+1) % 5)
+        g.add_edge(lower + i, lower + (i+1) % 5)
+        g.add_edge(lower + i, bottom)
+    return g
