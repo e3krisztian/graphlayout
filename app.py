@@ -394,11 +394,15 @@ class App:
     def randomize(self):
         self.set_layout(randomized_layout(self.layout))
 
-    # pinning changes the layout without restarting the cooling
+    def set_pins(self, layout):
+        # a pin change keeps the iteration count, but heats up to the new layout's
+        # temperature: after unpinning, the nodes may be stuck at the old, lower one
+        self.layout = layout
+        self.temperature = target_temperature(layout, self.iteration)
+        self.wake()
 
     def unpin_all(self):
-        self.layout = self.layout.unpinned_all()
-        self.wake()
+        self.set_pins(self.layout.unpinned_all())
 
     def grab(self, event):
         node = self.gcanvas.node_at(self.layout, event.x, event.y)
@@ -416,20 +420,20 @@ class App:
         if not self.dragging and math.dist((x, y), (event.x, event.y)) <= self.DRAG_DISTANCE:
             return
         self.dragging = True
-        self.layout = self.layout.pinned_at(node, self.gcanvas.to_layout(event.x, event.y))
-        self.wake()
+        self.set_pins(self.layout.pinned_at(node, self.gcanvas.to_layout(event.x, event.y)))
 
     def release(self, event):
         if self.grabbed is None:
             return
         node, x, y = self.grabbed
         # a dragged node stays pinned, a clicked one is toggled
+        self.gcanvas.frozen = False
         if not self.dragging:
-            self.layout = toggle_pin(self.layout, node)
+            self.set_pins(toggle_pin(self.layout, node))
+        else:
+            self.wake()
         self.grabbed = None
         self.dragging = False
-        self.gcanvas.frozen = False
-        self.wake()
 
     def labels_selected(self):
         if self.labels.get() != LABELS_OFF:
@@ -478,8 +482,10 @@ class App:
             self.gcanvas.draw(
                 self.layout, DARK if self.dark.get() else LIGHT, self.labels.get())
             self.status.set(
-                'nodes=%d edges=%d  n=%4d  tension=%.5f  temperature=%.5f  magnification=%.2f' % (
-                    len(self.layout.edges), self.edgecount, self.iteration,
+                'nodes=%d edges=%d pinned=%d  n=%4d  tension=%.5f  temperature=%.5f'
+                '  magnification=%.2f' % (
+                    len(self.layout.edges), self.edgecount, self.layout.pinned.sum(),
+                    self.iteration,
                     self.layout.tension, self.temperature, self.gcanvas.magnification))
             if self.animating:
                 sleep(0.01)
