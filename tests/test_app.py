@@ -1,4 +1,4 @@
-from app import GraphCanvas, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF
+from app import GraphCanvas, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, centered_position
 from layout import EDGE_LENGTH, GraphLayout
 from themes import DARK, LIGHT
 
@@ -97,3 +97,8 @@ def test_edge_of_4_times_the_ideal_length_is_drawn_in_the_stretched_color():
 def test_background_follows_the_theme():
     assert draw(triangle(), DARK, LABELS_OFF).options['background'] == DARK['background']
     assert draw(triangle(), LIGHT, LABELS_OFF).options['background'] == LIGHT['background']
+
+
+def test_dialog_is_centered_over_the_window():
+    # window at (100, 50) of 800x600: its center is (500, 350)
+    assert centered_position((100, 50, 800, 600), 200, 100) == (400, 300)

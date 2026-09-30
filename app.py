@@ -31,6 +31,12 @@ def raise_and_focus(root):
     root.focus_force()
 
 
+def centered_position(outer, width, height):
+    # top left corner for a width x height window centered over outer: (x, y, width, height)
+    outer_x, outer_y, outer_width, outer_height = outer
+    return outer_x + (outer_width - width) // 2, outer_y + (outer_height - height) // 2
+
+
 # how the node labels are drawn
 LABELS_OFF, LABELS_BELOW, LABELS_ABOVE = 'off', 'below', 'above'
 
@@ -130,6 +136,8 @@ class PipeDialog:
         nodes_per_circle, length, closed = parameters
         self.on_ok = on_ok
         self.window = tkinter.Toplevel(parent)
+        # hidden until it is placed, so it does not jump from its default position
+        self.window.withdraw()
         self.window.title("Custom pipe")
         self.window.transient(parent)
         self.window.resizable(False, False)
@@ -159,6 +167,15 @@ class PipeDialog:
         self.nodes_per_circle.trace_add('write', self.update_summary)
         self.length.trace_add('write', self.update_summary)
         self.update_summary()
+
+        # center over the parent, the requested size is known after the idle tasks
+        self.window.update_idletasks()
+        outer = (
+            parent.winfo_rootx(), parent.winfo_rooty(),
+            parent.winfo_width(), parent.winfo_height())
+        self.window.geometry('+%d+%d' % centered_position(
+            outer, self.window.winfo_reqwidth(), self.window.winfo_reqheight()))
+        self.window.deiconify()
 
         # the main window does not take input while the dialog is open
         self.window.wait_visibility()
