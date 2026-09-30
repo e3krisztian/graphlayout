@@ -119,14 +119,6 @@ class GraphLayout:
         assert_point_shape(result)
         return result
 
-    @property
-    def approx_diameter(self):
-        xmin = np.min(self.locations[:, X])
-        xmax = np.max(self.locations[:, X])
-        ymin = np.min(self.locations[:, Y])
-        ymax = np.max(self.locations[:, Y])
-        return math.sqrt((xmax - xmin) ** 2 + (ymax - ymin) ** 2)
-
     def step(self, t):
         '''
             create a new layout by applying delta to the current layout t times
@@ -274,17 +266,37 @@ try:
 except ImportError:
     import Tkinter as tkinter
 
+
+def window_geometry(root):
+    # 2/3 of the screen width at the right edge, leaving some room for panels/taskbars
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    width, height = screen_width * 2 // 3, int(screen_height * 0.95)
+    x, y = screen_width - width, 0
+    return '%dx%d+%d+%d' % (width, height, x, y)
+
+
+def raise_and_focus(root):
+    # window managers tend to ignore a plain focus request from a new window,
+    # briefly making it topmost gets it in front
+    root.lift()
+    root.attributes('-topmost', True)
+    root.after_idle(root.attributes, '-topmost', False)
+    root.focus_force()
+
+
 tk = tkinter.Tk()
+tk.geometry(window_geometry(tk))
+# pack the toolbar first, so it keeps its space when the window shrinks
+toolbar = tkinter.Frame(tk)
+toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
 frame = tkinter.Frame(tk, relief=tkinter.RIDGE, borderwidth=2)
-frame.pack(fill=tkinter.BOTH,expand=1)
-canvas = tkinter.Canvas(frame, width=800, height=500)
+frame.pack(fill=tkinter.BOTH, expand=1)
+canvas = tkinter.Canvas(frame, highlightthickness=0)
 canvas.pack(fill=tkinter.BOTH, expand=1)
 
-canvas.create_line(0,0,800,500, fill = "red")
-canvas.create_line(0,500,800,0, fill = "red")
-
 def button(side, text, command):
-    button = tkinter.Button(frame,text=text,command=command).pack(side=side)
+    tkinter.Button(toolbar, text=text, command=command).pack(side=side)
 
 g = None
 
@@ -369,9 +381,11 @@ button(tkinter.RIGHT, "Pipe", new_pipe)
 button(tkinter.RIGHT, "Pipe400", new_pipe_400)
 button(tkinter.RIGHT, "Pipe2000", new_pipe_2000)
 
-frame.pack()
-
 class GraphCanvas:
+    # space around the outermost nodes, in layout units, for the node circles and labels
+    PADDING = 5
+    MAX_MAGNIFICATION = 50.
+
     def __init__(self, canvas):
         self.canvas = canvas
         self.canvasitems = []
@@ -406,18 +420,21 @@ class GraphCanvas:
         self.canvas.tag_raise(item)
 
     def draw(self, glayout):
-        # recalculate magnification - to be able to draw the whole graph
-        self.magnification = 500.0 / glayout.approx_diameter
-        self.magnification = max(1., self.magnification)
-        self.magnification = min(50., self.magnification)
+        # fit the layout's bounding box into the canvas, keeping the aspect ratio
+        locations = glayout.locations
+        canvas_width = max(self.canvas.winfo_width(), 1)
+        canvas_height = max(self.canvas.winfo_height(), 1)
+        low = locations.min(axis=NODES) - self.PADDING
+        high = locations.max(axis=NODES) + self.PADDING
+        extent = high - low
+        self.magnification = min(
+            canvas_width / extent[X], canvas_height / extent[Y], self.MAX_MAGNIFICATION)
         self.clear()
 
-        # draw graph centered around its first node
-        c = glayout.locations[0]
-        x, y = c[X], c[Y]
-        offx = 400/self.magnification-x
-        offy = 250/self.magnification-y
-        locations = glayout.locations
+        # draw graph centered in the canvas
+        center = (low + high) / 2
+        offx = canvas_width / 2 / self.magnification - center[X]
+        offy = canvas_height / 2 / self.magnification - center[Y]
         # draw nodes
         for c, n in zip(locations, range(len(locations))):
             x, y = c[X], c[Y]
@@ -441,6 +458,10 @@ class GraphCanvas:
 
 gcanvas = GraphCanvas(canvas)
 new_pipe()
+
+# map the window, so the canvas has its real size before the first draw
+tk.update()
+raise_and_focus(tk)
 
 from time import sleep
 # main loop
