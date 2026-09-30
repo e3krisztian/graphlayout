@@ -1,0 +1,7 @@
+graphlayout is a prototype of an incremental, spring-force graph layout algorithm,
+with a tkinter app that shows the layout as it improves.
+
+Although it was started from scratch, it naturally shares a lot of ideas with other layout algorithms.
+
+A good summary and history of the algorithms in spring-force graph layout can be read at
+- https://arxiv.org/html/1201.3011v1
