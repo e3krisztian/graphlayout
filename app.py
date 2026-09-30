@@ -280,7 +280,8 @@ GRAPH_GROUPS = [
         ("Heawood", heawood),
         ("Moser", moser_spindle),
         ("Hanoi3", lambda: hanoi(3)),
-        ("Cubes", lambda: cube_stack(2, 3, 4)),
+        ("Cubes234", lambda: cube_stack(2, 3, 4)),
+        ("Cubes345", lambda: cube_stack(3, 4, 5)),
     ]),
     ("Platonic", 3, [
         ("Tetra", tetrahedron),
