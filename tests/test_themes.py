@@ -32,3 +32,7 @@ def test_edge_of_double_length_is_halfway_to_the_stretched_color():
 def test_edge_of_half_length_is_halfway_to_the_compressed_color():
     assert strain_color(REFERENCE / 2, REFERENCE, THEME) == '#4040bf'
 
+
+
+def test_themes_have_the_same_colors():
+    assert DARK.keys() == LIGHT.keys()

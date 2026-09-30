@@ -1,3 +1,5 @@
+import pytest
+
 from app import GraphCanvas, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, centered_position
 from layout import EDGE_LENGTH, GraphLayout
 from themes import DARK, LIGHT
@@ -113,3 +115,55 @@ def test_background_follows_the_theme():
 def test_dialog_is_centered_over_the_window():
     # window at (100, 50) of 800x600: its center is (500, 350)
     assert centered_position((100, 50, 800, 600), 200, 100) == (400, 300)
+
+
+def drawn_canvas(layout, labels=LABELS_OFF):
+    gcanvas = DisplaylessGraphCanvas(RecordingCanvas())
+    gcanvas.draw(layout, DARK, labels)
+    return gcanvas
+
+
+def test_node_at_finds_the_node_under_the_pointer():
+    layout = triangle()
+    gcanvas = drawn_canvas(layout)
+    for node, location in enumerate(layout.locations):
+        x, y = gcanvas.to_canvas(location)
+        assert gcanvas.node_at(layout, x + 1, y - 1) == node
+
+
+def test_node_at_is_none_away_from_the_nodes():
+    assert drawn_canvas(triangle()).node_at(triangle(), 0, 0) is None
+
+
+def test_to_layout_reverses_to_canvas():
+    gcanvas = drawn_canvas(triangle())
+    x, y = gcanvas.to_canvas([1.5, -2])
+    assert gcanvas.to_layout(x, y).tolist() == pytest.approx([1.5, -2])
+
+
+def test_frozen_view_keeps_its_transform_when_the_layout_changes():
+    gcanvas = drawn_canvas(triangle())
+    before = gcanvas.to_canvas([1, 1])
+    gcanvas.frozen = True
+    gcanvas.draw(triangle().pinned_at(2, [100, 100]), DARK, LABELS_OFF)
+    assert gcanvas.to_canvas([1, 1]) == pytest.approx(before)
+
+
+def test_view_is_fitted_again_when_unfrozen():
+    gcanvas = drawn_canvas(triangle())
+    before = gcanvas.to_canvas([1, 1])
+    gcanvas.draw(triangle().pinned_at(2, [100, 100]), DARK, LABELS_OFF)
+    assert gcanvas.to_canvas([1, 1]) != pytest.approx(before)
+
+
+def test_pinned_dots_have_the_pinned_color():
+    canvas = draw(triangle().pinned_at(1, [2, 0]), DARK, LABELS_OFF)
+    fills = [options['fill'] for kind, options in canvas.items if kind == 'oval']
+    assert fills == [DARK['node_fill'], DARK['pinned'], DARK['node_fill']]
+
+
+@pytest.mark.parametrize('labels', [LABELS_ABOVE, LABELS_BELOW])
+def test_pinned_label_boxes_have_the_pinned_outline(labels):
+    canvas = draw(triangle().pinned_at(1, [2, 0]), LIGHT, labels)
+    outlines = [options['outline'] for kind, options in canvas.items if kind == 'rectangle']
+    assert outlines == [LIGHT['node_outline'], LIGHT['pinned'], LIGHT['node_outline']]

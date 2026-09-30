@@ -6,10 +6,12 @@ import tkinter
 import tkinter.font
 from time import sleep
 
+import numpy as np
+
 from graphs import completegraph, tree, randomg, g1, g2, star, star2, pipe
 from layout import (
-    X, Y, NODES,
-    GraphLayout, circle_locations, randomized, target_temperature, improveall,
+    X, Y, NODES, COORDINATES,
+    GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin, target_temperature, improveall,
 )
 from themes import DARK, LIGHT, strain_color
 
@@ -50,15 +52,38 @@ class GraphCanvas:
     DOT_SIZE, MIN_DOT_SIZE = 0.6, 3
     LABEL_HEIGHT, MIN_LABEL_HEIGHT = 0.7, 6
     LABEL_MARGIN = 2
+    # a node can be grabbed within this many pixels, or its label height if larger
+    MIN_GRAB_RADIUS = 8
 
     def __init__(self, canvas):
         self.canvas = canvas
         self.magnification = 10
+        # the layout point drawn at the center of the canvas
+        self.center = np.zeros(2)
+        # a frozen view keeps its center and magnification, e.g. while a node is dragged
+        self.frozen = False
         self.fonts = {}
 
-    def draw(self, glayout, theme, labels):
+    def canvas_center(self):
+        return np.array([self.canvas.winfo_width() / 2, self.canvas.winfo_height() / 2])
+
+    def to_canvas(self, location):
+        return ((np.asarray(location) - self.center) * self.magnification
+                + self.canvas_center()).tolist()
+
+    def to_layout(self, x, y):
+        return (np.array([x, y]) - self.canvas_center()) / self.magnification + self.center
+
+    def node_at(self, glayout, x, y):
+        # the node nearest to canvas point (x, y) if it is within grabbing distance, else None
+        distances = np.linalg.norm(
+            glayout.locations - self.to_layout(x, y), axis=COORDINATES) * self.magnification
+        node = int(distances.argmin())
+        radius = max(self.LABEL_HEIGHT * self.magnification, self.MIN_GRAB_RADIUS)
+        return node if distances[node] <= radius else None
+
+    def fit(self, locations):
         # fit the layout's bounding box into the canvas, keeping the aspect ratio
-        locations = glayout.locations
         canvas_width = max(self.canvas.winfo_width(), 1)
         canvas_height = max(self.canvas.winfo_height(), 1)
         low = locations.min(axis=NODES) - self.PADDING
@@ -66,24 +91,28 @@ class GraphCanvas:
         extent = high - low
         self.magnification = min(
             canvas_width / extent[X], canvas_height / extent[Y], self.MAX_MAGNIFICATION)
+        self.center = (low + high) / 2
+
+    def draw(self, glayout, theme, labels):
+        if not self.frozen:
+            self.fit(glayout.locations)
         self.clear()
         self.canvas.configure(background=theme['background'])
 
-        # canvas coordinates of the nodes, the graph is centered in the canvas
-        center = (low + high) / 2
-        points = (locations - center) * self.magnification
-        points = (points + [canvas_width / 2, canvas_height / 2]).tolist()
+        # canvas coordinates of the nodes
+        points = self.to_canvas(glayout.locations)
+        pinned = glayout.pinned.tolist()
 
         # canvas items drawn later cover the ones drawn earlier
         if labels == LABELS_BELOW:
-            self.draw_labels(points, theme)
+            self.draw_labels(points, pinned, theme)
             self.draw_edges(glayout.edges, points, theme)
         else:
             self.draw_edges(glayout.edges, points, theme)
             if labels == LABELS_ABOVE:
-                self.draw_labels(points, theme)
+                self.draw_labels(points, pinned, theme)
             else:
-                self.draw_dots(points, theme)
+                self.draw_dots(points, pinned, theme)
 
     def draw_edges(self, edges, points, theme):
         width = 2 if self.magnification > 10 else 1
@@ -102,25 +131,30 @@ class GraphCanvas:
             self.canvas.create_line(
                 x1, y1, x2, y2, fill=strain_color(length, reference, theme), width=width)
 
-    def draw_dots(self, points, theme):
+    def draw_dots(self, points, pinned, theme):
         r = max(self.DOT_SIZE * self.magnification, self.MIN_DOT_SIZE) / 2
-        for x, y in points:
+        for (x, y), is_pinned in zip(points, pinned):
             self.canvas.create_oval(
                 x - r, y - r, x + r, y + r,
-                fill=theme['node_fill'], outline=theme['node_outline'])
+                fill=theme['pinned'] if is_pinned else theme['node_fill'],
+                outline=theme['node_outline'])
 
-    def draw_labels(self, points, theme):
+    def draw_labels(self, points, pinned, theme):
         # a node is drawn as its number in a box
         height = max(int(self.LABEL_HEIGHT * self.magnification), self.MIN_LABEL_HEIGHT)
         font = self.label_font(height)
         char_width = font.measure('0')
         h = height / 2 + self.LABEL_MARGIN
-        for node, (x, y) in enumerate(points):
+        for node, ((x, y), is_pinned) in enumerate(zip(points, pinned)):
             text = str(node)
             w = char_width * len(text) / 2 + self.LABEL_MARGIN
+            if is_pinned:
+                outline, width = theme['pinned'], 2
+            else:
+                outline, width = theme['node_outline'], 1
             self.canvas.create_rectangle(
                 x - w, y - h, x + w, y + h,
-                fill=theme['label_box'], outline=theme['node_outline'])
+                fill=theme['label_box'], outline=outline, width=width)
             self.canvas.create_text(x, y, text=text, font=font, fill=theme['label_text'])
 
     def label_font(self, height):
@@ -260,6 +294,8 @@ GRAPH_GROUPS = [
 class App:
     # graphs with more nodes than this start with their labels off
     LABELS_MAX_NODES = 100
+    # moving the pointer more than this many pixels with a node grabbed drags it
+    DRAG_DISTANCE = 3
 
     def __init__(self):
         self.root = tkinter.Tk()
@@ -288,8 +324,14 @@ class App:
         # a single step of the stopped animation is to be done
         self.step_requested = False
         self.running = True
+        # (node, x, y) of the node grabbed by the mouse and where it was grabbed, or None
+        self.grabbed = None
+        self.dragging = False
         self.create_statusline(statusline)
         self.create_toolbar()
+        self.canvas.bind('<ButtonPress-1>', self.grab)
+        self.canvas.bind('<B1-Motion>', self.drag)
+        self.canvas.bind('<ButtonRelease-1>', self.release)
         # the stopped animation has to follow the size of the window
         self.canvas.bind('<Configure>', lambda event: self.wake())
         # closing the window while waiting for events would leave the process waiting forever
@@ -319,6 +361,8 @@ class App:
             self.toolbar, text="Stop", width=5, command=self.toggle_animation)
         self.animation_button.pack(side=tkinter.LEFT)
         tkinter.Button(self.toolbar, text="Step", command=self.step).pack(side=tkinter.LEFT)
+        tkinter.Button(self.toolbar, text="Unpin all", command=self.unpin_all).pack(
+            side=tkinter.LEFT)
         for name, columns, graphs in reversed(GRAPH_GROUPS):
             buttons = [
                 (text, lambda create_graph=create_graph: self.new_graph(create_graph()))
@@ -348,7 +392,44 @@ class App:
             self.labels.set(self.label_order)
 
     def randomize(self):
-        self.set_layout(GraphLayout(self.layout.edges, randomized(self.layout.locations)))
+        self.set_layout(randomized_layout(self.layout))
+
+    # pinning changes the layout without restarting the cooling
+
+    def unpin_all(self):
+        self.layout = self.layout.unpinned_all()
+        self.wake()
+
+    def grab(self, event):
+        node = self.gcanvas.node_at(self.layout, event.x, event.y)
+        if node is None:
+            return
+        self.grabbed = (node, event.x, event.y)
+        self.dragging = False
+        # the dragged node stays under the pointer
+        self.gcanvas.frozen = True
+
+    def drag(self, event):
+        if self.grabbed is None:
+            return
+        node, x, y = self.grabbed
+        if not self.dragging and math.dist((x, y), (event.x, event.y)) <= self.DRAG_DISTANCE:
+            return
+        self.dragging = True
+        self.layout = self.layout.pinned_at(node, self.gcanvas.to_layout(event.x, event.y))
+        self.wake()
+
+    def release(self, event):
+        if self.grabbed is None:
+            return
+        node, x, y = self.grabbed
+        # a dragged node stays pinned, a clicked one is toggled
+        if not self.dragging:
+            self.layout = toggle_pin(self.layout, node)
+        self.grabbed = None
+        self.dragging = False
+        self.gcanvas.frozen = False
+        self.wake()
 
     def labels_selected(self):
         if self.labels.get() != LABELS_OFF:

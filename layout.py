@@ -45,11 +45,16 @@ def randomized(locations):
 
 
 class GraphLayout:
-    def __init__(self, edges, locations):
+    def __init__(self, edges, locations, pinned=None):
         assert len(edges) == len(locations)
         self.edges = [np.array(nodeindices, dtype=np.int64) for nodeindices in edges]
         self.locations = np.array(locations, dtype=np.float64)
         assert_locations_shape(self.locations, length=len(edges))
+        # (n,) bool array, pinned nodes keep their location
+        if pinned is None:
+            pinned = np.zeros(len(edges), dtype=bool)
+        self.pinned = np.array(pinned, dtype=bool)
+        assert self.pinned.shape == (len(edges),)
         self.delta = self.calculate_delta()
         self.tension = self.calculate_tension()
 
@@ -77,6 +82,8 @@ class GraphLayout:
             delta[node] = attraction + repulsion
         result = np.array(delta, dtype=np.float64)
         assert_locations_shape(result, length=len(self.edges))
+        # pinned nodes do not move, and their unrelievable forces are left out of the tension
+        result[self.pinned] = 0
         return result
 
     def attraction(self, loc_deltas):
@@ -108,7 +115,39 @@ class GraphLayout:
             create a new layout by applying delta to the current layout t times
         '''
         new_locations = self.locations + self.delta * t
-        return GraphLayout(self.edges, new_locations)
+        return GraphLayout(self.edges, new_locations, self.pinned)
+
+    def pinned_at(self, node, location):
+        '''
+            create a new layout with node moved to location and pinned there
+        '''
+        locations = self.locations.copy()
+        locations[node] = location
+        pinned = self.pinned.copy()
+        pinned[node] = True
+        return GraphLayout(self.edges, locations, pinned)
+
+    def unpinned(self, node):
+        pinned = self.pinned.copy()
+        pinned[node] = False
+        return GraphLayout(self.edges, self.locations, pinned)
+
+    def unpinned_all(self):
+        return GraphLayout(self.edges, self.locations)
+
+
+def randomized_layout(layout):
+    # pinned nodes stay in place
+    pinned_column = np.expand_dims(layout.pinned, axis=COORDINATES)
+    locations = np.where(pinned_column, layout.locations, randomized(layout.locations))
+    return GraphLayout(layout.edges, locations, layout.pinned)
+
+
+def toggle_pin(layout, node):
+    # a free node is pinned where it is
+    if layout.pinned[node]:
+        return layout.unpinned(node)
+    return layout.pinned_at(node, layout.locations[node])
 
 
 def target_temperature(layout, iteration):
