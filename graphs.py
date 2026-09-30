@@ -151,6 +151,22 @@ def heawood():
             g.add_edge(i, (i+5) % 14)
     return g
 
+def moser_spindle():
+    '''
+        two rhombi of 2 triangles each, sharing a node at one end, their other ends linked
+
+        all its edges can be drawn with unit length, but it needs 4 colours
+    '''
+    g = Graph(7)
+    for a, b, tip in [(1, 2, 3), (4, 5, 6)]:
+        g.add_edge(0, a)
+        g.add_edge(0, b)
+        g.add_edge(a, b)
+        g.add_edge(a, tip)
+        g.add_edge(b, tip)
+    g.add_edge(3, 6)
+    return g
+
 def hanoi(disks):
     '''
         the states of the Tower of Hanoi with 3 pegs, linked by the legal moves

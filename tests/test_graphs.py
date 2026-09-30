@@ -1,6 +1,10 @@
+import itertools
+
 import pytest
 
-from graphs import cube, dodecahedron, hanoi, heawood, icosahedron, octahedron, petersen, pipe, tetrahedron
+from graphs import (
+    cube, dodecahedron, hanoi, heawood, icosahedron, moser_spindle, octahedron, petersen, pipe,
+    tetrahedron)
 
 
 def degrees(graph):
@@ -167,3 +171,24 @@ def test_hanoi_graph(disks):
 def test_hanoi_graph_moves_the_tower_in_the_known_number_of_steps(disks):
     all_on_first_peg, all_on_last_peg = 0, 3 ** disks - 1
     assert distance(hanoi(disks), all_on_first_peg, all_on_last_peg) == 2 ** disks - 1
+
+
+def test_moser_spindle():
+    graph = moser_spindle()
+    assert graph.nodecount == 7
+    assert edge_count(graph) == 11
+    assert degrees(graph) == [3] * 6 + [4]
+    assert is_simple(graph)
+    assert is_connected(graph)
+
+
+def test_moser_spindle_needs_4_colours():
+    graph = moser_spindle()
+
+    def proper(colours):
+        return all(
+            colours[node] != colours[neighbour]
+            for node, neighbours in enumerate(graph.edges) for neighbour in neighbours)
+
+    assert not any(proper(colours) for colours in itertools.product(range(3), repeat=7))
+    assert any(proper(colours) for colours in itertools.product(range(4), repeat=7))
