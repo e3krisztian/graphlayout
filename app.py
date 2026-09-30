@@ -1,13 +1,16 @@
 # GUI app: shows a graph while its layout is being improved
 
+import math
 import tkinter
+import tkinter.font
 from time import sleep
 
-from graphs import completegraph, tree, randomg, g1, g2, star, star2, rings
+from graphs import completegraph, tree, randomg, g1, g2, star, star2, pipe
 from layout import (
     X, Y, NODES,
     GraphLayout, circle_locations, randomized, target_temperature, improveall,
 )
+from themes import DARK, LIGHT, strain_color
 
 
 def window_geometry(root):
@@ -28,44 +31,25 @@ def raise_and_focus(root):
     root.focus_force()
 
 
+# how the node labels are drawn
+LABELS_OFF, LABELS_BELOW, LABELS_ABOVE = 'off', 'below', 'above'
+
+
 class GraphCanvas:
-    # space around the outermost nodes, in layout units, for the node circles and labels
+    # space around the outermost nodes, in layout units, for the node dots and labels
     PADDING = 5
     MAX_MAGNIFICATION = 50.
+    # sizes in layout units, with their minimum in pixels
+    DOT_SIZE, MIN_DOT_SIZE = 0.6, 3
+    LABEL_HEIGHT, MIN_LABEL_HEIGHT = 0.7, 6
+    LABEL_MARGIN = 2
 
     def __init__(self, canvas):
         self.canvas = canvas
-        self.canvasitems = []
         self.magnification = 10
+        self.fonts = {}
 
-    def drawcircle(self, x, y, r):
-        m = self.magnification
-        x = x * m
-        y = y * m
-        r = r * m
-        self.canvasitems.append(self.canvas.create_oval(x-r/2, y-r/2, x+r/2, y+r/2))
-
-    def drawline(self, x1, y1, x2, y2):
-        m = self.magnification
-        x1 = x1 * m
-        y1 = y1 * m
-        x2 = x2 * m
-        y2 = y2 * m
-        self.canvasitems.append(self.canvas.create_line(x1,y1,x2,y2))
-
-    def write(self, x, y, text):
-        m = self.magnification
-        item = self.canvas.create_text(0,0,text=text,anchor="sw",font=('Courier', int(5*m)))
-        x0, y0, x1, y1 = self.canvas.bbox(item)
-        x = x*m-(x1-x0)/2
-        y = y*m-(y0-y1)/2
-        self.canvas.move(item, x, y)
-        self.canvasitems.append(item)
-        x0, y0, x1, y1 = self.canvas.bbox(item)
-        self.canvasitems.append(self.canvas.create_rectangle(x0, y0, x1, y1, fill='yellow'))
-        self.canvas.tag_raise(item)
-
-    def draw(self, glayout):
+    def draw(self, glayout, theme, labels):
         # fit the layout's bounding box into the canvas, keeping the aspect ratio
         locations = glayout.locations
         canvas_width = max(self.canvas.winfo_width(), 1)
@@ -76,77 +60,237 @@ class GraphCanvas:
         self.magnification = min(
             canvas_width / extent[X], canvas_height / extent[Y], self.MAX_MAGNIFICATION)
         self.clear()
+        self.canvas.configure(background=theme['background'])
 
-        # draw graph centered in the canvas
+        # canvas coordinates of the nodes, the graph is centered in the canvas
         center = (low + high) / 2
-        offx = canvas_width / 2 / self.magnification - center[X]
-        offy = canvas_height / 2 / self.magnification - center[Y]
-        # draw nodes
-        for c, n in zip(locations, range(len(locations))):
-            x, y = c[X], c[Y]
-            self.drawcircle(x + offx, y + offy, 2)
-            self.write(x + offx, y + offy, n)
-        # draw edges
-        for i in range(len(locations)):
-            c1 = locations[i]
-            x1, y1 = c1[X], c1[Y]
-            for dest in glayout.edges[i]:
-                if i < dest:
-                    c2 = locations[dest]
-                    x2, y2 = c2[X], c2[Y]
-                    self.drawline(x1+offx, y1+offy, x2+offx, y2+offy)
+        points = (locations - center) * self.magnification
+        points = (points + [canvas_width / 2, canvas_height / 2]).tolist()
+
+        # canvas items drawn later cover the ones drawn earlier
+        if labels == LABELS_BELOW:
+            self.draw_labels(points, theme)
+            self.draw_edges(glayout.edges, points, theme)
+        else:
+            self.draw_edges(glayout.edges, points, theme)
+            if labels == LABELS_ABOVE:
+                self.draw_labels(points, theme)
+            else:
+                self.draw_dots(points, theme)
+
+    def draw_edges(self, edges, points, theme):
+        m = self.magnification
+        width = 2 if m > 10 else 1
+        for node, (x1, y1) in enumerate(points):
+            for dest in edges[node]:
+                if node < dest:
+                    x2, y2 = points[dest]
+                    length = math.hypot(x2 - x1, y2 - y1) / m
+                    self.canvas.create_line(
+                        x1, y1, x2, y2, fill=strain_color(length, theme), width=width)
+
+    def draw_dots(self, points, theme):
+        r = max(self.DOT_SIZE * self.magnification, self.MIN_DOT_SIZE) / 2
+        for x, y in points:
+            self.canvas.create_oval(
+                x - r, y - r, x + r, y + r,
+                fill=theme['node_fill'], outline=theme['node_outline'])
+
+    def draw_labels(self, points, theme):
+        # a node is drawn as its number in a box
+        height = max(int(self.LABEL_HEIGHT * self.magnification), self.MIN_LABEL_HEIGHT)
+        font = self.label_font(height)
+        char_width = font.measure('0')
+        h = height / 2 + self.LABEL_MARGIN
+        for node, (x, y) in enumerate(points):
+            text = str(node)
+            w = char_width * len(text) / 2 + self.LABEL_MARGIN
+            self.canvas.create_rectangle(
+                x - w, y - h, x + w, y + h,
+                fill=theme['label_box'], outline=theme['node_outline'])
+            self.canvas.create_text(x, y, text=text, font=font, fill=theme['label_text'])
+
+    def label_font(self, height):
+        # negative font size is in pixels
+        if height not in self.fonts:
+            self.fonts[height] = tkinter.font.Font(
+                root=self.canvas, family='Courier', size=-height)
+        return self.fonts[height]
 
     def clear(self):
-        #  clear previous screen
-        for ci in self.canvasitems:
-            self.canvas.delete(ci)
-        self.canvasitems = []
+        self.canvas.delete('all')
 
 
-# (button text, graph creator), the buttons are placed from the right in this order
-GRAPHS = [
-    ("g2", g2),
-    ("g1", g1),
-    ("Star", lambda: star(50)),
-    ("Star2", lambda: star2(50)),
-    ("T 200", lambda: tree(200)),
-    ("T 100", lambda: tree(100)),
-    ("T 40", lambda: tree(40)),
-    ("Random", lambda: randomg(20, 50)),
-    ("Complete", lambda: completegraph(40)),
-    ("Ring", lambda: rings(20, 5)),
-    ("Ring400", lambda: rings(40, 10)),
-    ("Pipe", lambda: rings(10, 10)),
-    ("Pipe400", lambda: rings(20, 20)),
-    ("Pipe2000", lambda: rings(20, 100)),
+class PipeDialog:
+    # asks for the parameters of a pipe, OK passes them to on_ok
+    MIN_NODES_PER_CIRCLE = 3
+    MIN_LENGTH = 1
+
+    def __init__(self, parent, parameters, on_ok):
+        nodes_per_circle, length, closed = parameters
+        self.on_ok = on_ok
+        self.window = tkinter.Toplevel(parent)
+        self.window.title("Custom pipe")
+        self.window.transient(parent)
+        self.window.resizable(False, False)
+
+        self.nodes_per_circle = tkinter.StringVar(value=nodes_per_circle)
+        self.length = tkinter.StringVar(value=length)
+        self.closed = tkinter.BooleanVar(value=closed)
+        self.summary = tkinter.StringVar()
+
+        frame = tkinter.Frame(self.window, padx=10, pady=10)
+        frame.pack()
+        first = self.spinbox(
+            frame, 0, "Nodes per circle", self.nodes_per_circle, self.MIN_NODES_PER_CIRCLE)
+        self.spinbox(frame, 1, "Length (circles)", self.length, self.MIN_LENGTH)
+        tkinter.Checkbutton(frame, text="Closed (torus)", variable=self.closed).grid(
+            row=2, column=1, sticky=tkinter.W)
+        tkinter.Label(frame, textvariable=self.summary).grid(
+            row=3, column=0, columnspan=2, pady=5)
+        buttons = tkinter.Frame(frame)
+        buttons.grid(row=4, column=0, columnspan=2)
+        self.ok_button = tkinter.Button(buttons, text="OK", command=self.ok)
+        self.ok_button.pack(side=tkinter.LEFT)
+        tkinter.Button(buttons, text="Cancel", command=self.cancel).pack(side=tkinter.LEFT)
+
+        self.window.bind('<Return>', lambda event: self.ok())
+        self.window.bind('<Escape>', lambda event: self.cancel())
+        self.nodes_per_circle.trace_add('write', self.update_summary)
+        self.length.trace_add('write', self.update_summary)
+        self.update_summary()
+
+        # the main window does not take input while the dialog is open
+        self.window.wait_visibility()
+        self.window.grab_set()
+        first.focus_set()
+        first.selection_range(0, tkinter.END)
+
+    def spinbox(self, frame, row, text, variable, minimum):
+        tkinter.Label(frame, text=text).grid(row=row, column=0, sticky=tkinter.E, padx=5)
+        spinbox = tkinter.Spinbox(frame, from_=minimum, to=1000, textvariable=variable, width=6)
+        spinbox.grid(row=row, column=1, sticky=tkinter.W, pady=2)
+        return spinbox
+
+    def sizes(self):
+        # (nodes per circle, length) or None if they are not valid
+        try:
+            nodes_per_circle = int(self.nodes_per_circle.get())
+            length = int(self.length.get())
+        except ValueError:
+            return None
+        if nodes_per_circle < self.MIN_NODES_PER_CIRCLE or length < self.MIN_LENGTH:
+            return None
+        return nodes_per_circle, length
+
+    def update_summary(self, *args):
+        sizes = self.sizes()
+        if sizes:
+            nodes_per_circle, length = sizes
+            self.summary.set("%d nodes" % (nodes_per_circle * length))
+            self.ok_button.configure(state=tkinter.NORMAL)
+        else:
+            self.summary.set("nodes per circle: %d or more, length: %d or more" % (
+                self.MIN_NODES_PER_CIRCLE, self.MIN_LENGTH))
+            self.ok_button.configure(state=tkinter.DISABLED)
+
+    def ok(self):
+        sizes = self.sizes()
+        if sizes:
+            self.window.destroy()
+            self.on_ok(*sizes, self.closed.get())
+
+    def cancel(self):
+        self.window.destroy()
+
+
+PIPES = "Pipes"
+
+# (group name, buttons in a row, [(button text, graph creator)])
+GRAPH_GROUPS = [
+    ("Small", 3, [
+        ("g1", g1),
+        ("g2", g2),
+        ("Random", lambda: randomg(20, 50)),
+        ("Star", lambda: star(50)),
+        ("Star2", lambda: star2(50)),
+        ("Complete", lambda: completegraph(40)),
+    ]),
+    ("Trees", 2, [
+        ("T 40", lambda: tree(40)),
+        ("T 100", lambda: tree(100)),
+        ("T 200", lambda: tree(200)),
+    ]),
+    (PIPES, 4, [
+        ("Ring", lambda: pipe(20, 5)),
+        ("Ring400", lambda: pipe(40, 10)),
+        ("Pipe", lambda: pipe(10, 10)),
+        ("Pipe400", lambda: pipe(20, 20)),
+        ("Pipe2000", lambda: pipe(20, 100)),
+        ("Torus", lambda: pipe(10, 10, closed=True)),
+        ("Torus400", lambda: pipe(20, 20, closed=True)),
+    ]),
 ]
 
 
 class App:
+    # graphs with more nodes than this start with their labels off
+    LABELS_MAX_NODES = 100
+
     def __init__(self):
         self.root = tkinter.Tk()
         self.root.geometry(window_geometry(self.root))
-        # pack the toolbar first, so it keeps its space when the window shrinks
+        # pack the toolbar and the status line first, so they keep their space
+        # when the window shrinks
         self.toolbar = tkinter.Frame(self.root)
         self.toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+        statusline = tkinter.Frame(self.root)
+        statusline.pack(side=tkinter.BOTTOM, fill=tkinter.X)
         frame = tkinter.Frame(self.root, relief=tkinter.RIDGE, borderwidth=2)
         frame.pack(fill=tkinter.BOTH, expand=1)
         self.canvas = tkinter.Canvas(frame, highlightthickness=0)
         self.canvas.pack(fill=tkinter.BOTH, expand=1)
         self.gcanvas = GraphCanvas(self.canvas)
 
-        self.button(tkinter.LEFT, "Exit", self.exit)
-        self.button(tkinter.LEFT, "Randomize", self.randomize)
-        for text, create_graph in GRAPHS:
-            self.button(
-                tkinter.RIGHT, text,
-                lambda create_graph=create_graph: self.new_graph(create_graph()))
+        self.status = tkinter.StringVar()
+        self.dark = tkinter.BooleanVar(value=True)
+        self.labels = tkinter.StringVar(value=LABELS_ABOVE)
+        # the last choice of drawing the labels, for graphs that start with labels
+        self.label_order = LABELS_ABOVE
+        self.pipe_parameters = (10, 10, False)
+        self.create_statusline(statusline)
+        self.create_toolbar()
 
         self.running = True
-        self.new_graph(rings(10, 10))
+        self.new_graph(pipe(10, 10))
 
-    def button(self, side, text, command):
-        tkinter.Button(self.toolbar, text=text, command=command).pack(side=side)
+    def create_statusline(self, statusline):
+        tkinter.Label(statusline, textvariable=self.status, font='TkFixedFont').pack(
+            side=tkinter.LEFT)
+        tkinter.Checkbutton(statusline, text="Dark", variable=self.dark).pack(
+            side=tkinter.RIGHT, padx=10)
+        for text, value in [
+                ("above edges", LABELS_ABOVE), ("below edges", LABELS_BELOW), ("off", LABELS_OFF)]:
+            tkinter.Radiobutton(
+                statusline, text=text, value=value, variable=self.labels,
+                command=self.labels_selected).pack(side=tkinter.RIGHT)
+        tkinter.Label(statusline, text="Labels:").pack(side=tkinter.RIGHT)
+
+    def create_toolbar(self):
+        tkinter.Button(self.toolbar, text="Exit", command=self.exit).pack(side=tkinter.LEFT)
+        tkinter.Button(self.toolbar, text="Randomize", command=self.randomize).pack(
+            side=tkinter.LEFT)
+        for name, columns, graphs in reversed(GRAPH_GROUPS):
+            buttons = [
+                (text, lambda create_graph=create_graph: self.new_graph(create_graph()))
+                for text, create_graph in graphs]
+            if name == PIPES:
+                buttons.append(("Custom...", self.open_pipe_dialog))
+            group = tkinter.LabelFrame(self.toolbar, text=name)
+            group.pack(side=tkinter.RIGHT, anchor=tkinter.N, padx=2)
+            for i, (text, command) in enumerate(buttons):
+                tkinter.Button(group, text=text, command=command).grid(
+                    row=i // columns, column=i % columns, sticky=tkinter.EW)
 
     def set_layout(self, layout):
         # a new layout restarts the iteration count and the cooling
@@ -157,9 +301,25 @@ class App:
     def new_graph(self, graph):
         locations = randomized(circle_locations(graph.nodecount))
         self.set_layout(GraphLayout(graph.edges, locations))
+        self.edgecount = sum(len(neighbours) for neighbours in graph.edges) // 2
+        if graph.nodecount > self.LABELS_MAX_NODES:
+            self.labels.set(LABELS_OFF)
+        else:
+            self.labels.set(self.label_order)
 
     def randomize(self):
         self.set_layout(GraphLayout(self.layout.edges, randomized(self.layout.locations)))
+
+    def labels_selected(self):
+        if self.labels.get() != LABELS_OFF:
+            self.label_order = self.labels.get()
+
+    def open_pipe_dialog(self):
+        PipeDialog(self.root, self.pipe_parameters, self.new_pipe)
+
+    def new_pipe(self, nodes_per_circle, length, closed):
+        self.pipe_parameters = (nodes_per_circle, length, closed)
+        self.new_graph(pipe(nodes_per_circle, length, closed))
 
     def exit(self):
         self.running = False
@@ -172,11 +332,14 @@ class App:
         while self.running:
             self.temperature = min(
                 self.temperature, target_temperature(self.layout, self.iteration))
-            print('n= %4d, magnification=%.5f, tension=%.5f, temperature=%.5f' % (
-                self.iteration, self.gcanvas.magnification, self.layout.tension, self.temperature))
+            self.status.set(
+                'nodes=%d edges=%d  n=%4d  tension=%.5f  temperature=%.5f  magnification=%.2f' % (
+                    len(self.layout.edges), self.edgecount, self.iteration,
+                    self.layout.tension, self.temperature, self.gcanvas.magnification))
             self.layout = improveall(self.layout, self.temperature)
             self.iteration += 1
-            self.gcanvas.draw(self.layout)
+            self.gcanvas.draw(
+                self.layout, DARK if self.dark.get() else LIGHT, self.labels.get())
             sleep(0.01)
             # update native window & process events
             self.canvas.update()

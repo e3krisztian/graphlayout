@@ -76,15 +76,26 @@ def star2(n):
         g.add_edge(n-2, i)
     return g
 
-def rings(n, m):
-    "m rings each constructed of n sections"
+def pipe(nodes_per_circle, length, closed=False):
+    '''
+        length circles of nodes_per_circle nodes each, every circle linked to the next one
+
+        closed links the last circle to the first one as well, making it a torus
+    '''
+    n, m = nodes_per_circle, length
     g = Graph(n * m)
     p = permutation(n * m)
+    # a circle of 2 nodes is a single edge, of 1 node is no edge at all
+    circle_edges = n if n > 2 else n - 1
+    # 2 circles are already linked, 1 circle would be linked to itself
+    linked_circles = m if closed and m > 2 else m - 1
     for r in range(m):
         r0 = r*n
-        for i in range(n):
+        for i in range(circle_edges):
             g.add_edge(p[r0 + i], p[r0 + (i+1) % n])
-        if r > 0:
-            for i in range(n):
-                g.add_edge(p[r0-n +i], p[r0 + i])
+    for r in range(linked_circles):
+        r0 = r*n
+        r1 = (r+1) % m * n
+        for i in range(n):
+            g.add_edge(p[r0 + i], p[r1 + i])
     return g

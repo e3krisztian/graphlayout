@@ -15,6 +15,9 @@ import numpy as np
 X, Y = 0, 1                # column index into a (k, 2) array: point[:, X] / point[:, Y]
 NODES, COORDINATES = 0, 1  # axis index for reductions over a (k, 2) array
 
+# the length at which an edge neither pulls nor pushes its nodes
+EDGE_LENGTH = 2
+
 
 def assert_locations_shape(array, *, length=None):
     assert array.ndim == 2 and array.shape[1] == 2
@@ -78,12 +81,11 @@ class GraphLayout:
 
     def attraction(self, loc_deltas):
         assert_locations_shape(loc_deltas)
-        edge_length = 2
         distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
         distances_column = np.expand_dims(distances, axis=COORDINATES)
         attractions = (
-            (distances_column - edge_length) * loc_deltas
-            / (2 * distances_column * edge_length)
+            (distances_column - EDGE_LENGTH) * loc_deltas
+            / (2 * distances_column * EDGE_LENGTH)
         )
         result = np.nansum(attractions, axis=NODES)
         assert_point_shape(result)
