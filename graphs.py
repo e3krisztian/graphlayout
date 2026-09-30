@@ -124,18 +124,23 @@ def octahedron():
                 g.add_edge(i, j)
     return g
 
-def dodecahedron():
+def generalized_petersen(n, k):
     '''
-        the generalized Petersen graph GP(10, 2):
-        an outer ring of 10 nodes, each linked to a node of an inner ring,
-        where the inner nodes are linked to the ones 2 steps further
+        an outer ring of n nodes, each linked to a node of an inner ring,
+        where the inner nodes are linked to the ones k steps further
     '''
-    g = Graph(20)
-    for i in range(10):
-        g.add_edge(i, (i+1) % 10)
-        g.add_edge(i, 10 + i)
-        g.add_edge(10 + i, 10 + (i+2) % 10)
+    g = Graph(2 * n)
+    for i in range(n):
+        g.add_edge(i, (i+1) % n)
+        g.add_edge(i, n + i)
+        g.add_edge(n + i, n + (i+k) % n)
     return g
+
+def petersen():
+    return generalized_petersen(5, 2)
+
+def dodecahedron():
+    return generalized_petersen(10, 2)
 
 def icosahedron():
     '''

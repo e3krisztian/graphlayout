@@ -1,6 +1,6 @@
 import pytest
 
-from graphs import cube, dodecahedron, icosahedron, octahedron, pipe, tetrahedron
+from graphs import cube, dodecahedron, icosahedron, octahedron, petersen, pipe, tetrahedron
 
 
 def degrees(graph):
@@ -102,3 +102,21 @@ def test_platonic_solid(solid, nodecount, edgecount, degree):
     assert degrees(graph) == [degree] * nodecount
     assert is_simple(graph)
     assert is_connected(graph)
+
+
+def test_petersen_graph():
+    graph = petersen()
+    assert graph.nodecount == 10
+    assert edge_count(graph) == 15
+    assert degrees(graph) == [3] * 10
+    assert is_simple(graph)
+    assert is_connected(graph)
+
+
+def test_petersen_graph_pairs_have_one_common_neighbour_unless_linked():
+    # what sets it apart from the other 3-regular graphs on 10 nodes, e.g. the pentagonal prism
+    graph = petersen()
+    for node1 in range(10):
+        for node2 in range(node1 + 1, 10):
+            common = set(graph.edges[node1]) & set(graph.edges[node2])
+            assert len(common) == (0 if node2 in graph.edges[node1] else 1)
