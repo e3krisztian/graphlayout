@@ -151,6 +151,25 @@ def heawood():
             g.add_edge(i, (i+5) % 14)
     return g
 
+def hanoi(disks):
+    '''
+        the states of the Tower of Hanoi with 3 pegs, linked by the legal moves
+
+        a state is the pegs of the disks, from the smallest disk up,
+        its node is the pegs read as a number in base 3
+    '''
+    g = Graph(3 ** disks)
+    for node in range(3 ** disks):
+        pegs = [node // 3 ** disk % 3 for disk in range(disks)]
+        # the top of each peg: the smallest disk on it, or disks if it is empty
+        tops = [pegs.index(peg) if peg in pegs else disks for peg in range(3)]
+        for source in range(3):
+            for target in range(3):
+                # a move and its reverse are the same edge: add it from the lower peg
+                if tops[source] < tops[target] and target > source:
+                    g.add_edge(node, node + (target - source) * 3 ** tops[source])
+    return g
+
 def dodecahedron():
     return generalized_petersen(10, 2)
 

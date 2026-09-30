@@ -1,6 +1,6 @@
 import pytest
 
-from graphs import cube, dodecahedron, heawood, icosahedron, octahedron, petersen, pipe, tetrahedron
+from graphs import cube, dodecahedron, hanoi, heawood, icosahedron, octahedron, petersen, pipe, tetrahedron
 
 
 def degrees(graph):
@@ -140,3 +140,30 @@ def test_heawood_graph_is_the_fano_plane():
     for node1 in range(14):
         for node2 in range(node1 + 2, 14, 2):
             assert len(set(graph.edges[node1]) & set(graph.edges[node2])) == 1
+
+
+def distance(graph, node1, node2):
+    distances = {node1: 0}
+    todo = [node1]
+    for node in todo:
+        for neighbour in graph.edges[node]:
+            if neighbour not in distances:
+                distances[neighbour] = distances[node] + 1
+                todo.append(neighbour)
+    return distances[node2]
+
+
+@pytest.mark.parametrize("disks", [1, 2, 3, 4])
+def test_hanoi_graph(disks):
+    # the 3 states with all disks on a single peg have 2 moves, all the others 3
+    graph = hanoi(disks)
+    assert graph.nodecount == 3 ** disks
+    assert degrees(graph) == [2] * 3 + [3] * (3 ** disks - 3)
+    assert is_simple(graph)
+    assert is_connected(graph)
+
+
+@pytest.mark.parametrize("disks", [1, 2, 3, 4])
+def test_hanoi_graph_moves_the_tower_in_the_known_number_of_steps(disks):
+    all_on_first_peg, all_on_last_peg = 0, 3 ** disks - 1
+    assert distance(hanoi(disks), all_on_first_peg, all_on_last_peg) == 2 ** disks - 1
