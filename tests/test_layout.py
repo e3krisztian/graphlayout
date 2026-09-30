@@ -3,7 +3,10 @@ import math
 import numpy as np
 import pytest
 
-from layout import EDGE_LENGTH, GraphLayout, improveall, randomized_layout, toggle_pin
+from layout import (
+    EDGE_LENGTH, JITTER,
+    GraphLayout, improveall, jitter_due, jittered, randomized_layout, toggle_pin,
+)
 
 
 def two_node_layout(distance):
@@ -46,7 +49,7 @@ def test_step_does_not_move_pinned_nodes():
 
 
 def test_improveall_does_not_move_pinned_nodes():
-    layout = improveall(path_layout([False, True, False]), temperature=1.0)
+    layout = improveall(path_layout([False, True, False]))
     assert layout.locations[1].tolist() == [10, 0]
     assert layout.pinned.tolist() == [False, True, False]
 
@@ -122,7 +125,7 @@ def test_delta_is_the_negative_gradient_of_the_energy():
 
 
 @pytest.mark.parametrize('seed', range(5))
-def test_improveall_does_not_raise_the_energy_at_zero_temperature(seed):
+def test_improveall_does_not_raise_the_energy(seed):
     np.random.seed(seed)
     layout = GraphLayout(
         [[1, 2], [0, 2, 3], [0, 1], [1]], np.random.random((4, 2)) * 10)
@@ -138,3 +141,23 @@ def test_improveall_takes_a_step_that_lowers_the_energy_but_raises_the_tension()
     assert layout.step(1 / 16).tension > layout.tension
     improved = improveall(layout)
     assert improved.energy < layout.energy
+
+
+def test_jittered_moves_free_coordinates_by_minus_one_zero_or_one_jitter():
+    np.random.seed(0)
+    layout = GraphLayout([[] for _ in range(50)], np.random.random((50, 2)) * 100)
+    moves = (jittered(layout).locations - layout.locations) / JITTER
+    assert moves == pytest.approx(np.round(moves))
+    assert set(np.round(moves).flatten().tolist()) == {-1, 0, 1}
+
+
+def test_jittered_does_not_move_pinned_nodes():
+    layout = path_layout([False, True, False])
+    for _ in range(10):
+        jittered_layout = jittered(layout)
+        assert jittered_layout.locations[1].tolist() == [10, 0]
+        assert jittered_layout.pinned.tolist() == [False, True, False]
+
+
+def test_jitter_is_due_when_the_square_root_of_the_steps_reaches_a_new_integer():
+    assert [steps for steps in range(30) if jitter_due(steps)] == [1, 4, 9, 16, 25]

@@ -1,7 +1,6 @@
 # an incremental graph layout algorithm - prototype
 
 import math
-import random
 
 import numpy as np
 
@@ -165,30 +164,30 @@ def toggle_pin(layout, node):
     return layout.pinned_at(node, layout.locations[node])
 
 
-def target_temperature(layout, iteration):
-    '''
-        Temperature to aim for at a given point in the layout process.
-        Currently based only on the layout's tension; iteration is
-        accepted for future use (e.g. an explicit cooling schedule).
-    '''
-    return layout.tension / 100.0
+# the size of the jitter, in layout units
+JITTER = 0.001
 
 
-def accept_layout_step(current_energy, candidate_energy, temperature):
+def jitter_due(steps):
     '''
-        Metropolis criterion: always accept an improvement; accept a worse
-        candidate with probability exp(-delta_energy / temperature), so
-        temperature <= 0 recovers strict (never accept worse) behavior.
+        jitter often after an input event, then less and less often:
+        when the square root of the steps since then reaches a new integer
     '''
-    if candidate_energy <= current_energy:
-        return True
-    if temperature <= 0:
-        return False
-    return random.random() < math.exp(-(candidate_energy - current_energy) / temperature)
+    return steps > 0 and math.isqrt(steps) ** 2 == steps
 
 
-def improveall(layout, temperature=0.0):
-    # double t while the step is accepted (Metropolis criterion at the given temperature)
+def jittered(layout):
+    '''
+        create a new layout with every coordinate of the free nodes
+        moved by -JITTER, 0 or JITTER, at random
+    '''
+    jitter = np.random.randint(-1, 2, layout.locations.shape) * JITTER
+    jitter[layout.pinned] = 0
+    return GraphLayout(layout.edges, layout.locations + jitter, layout.pinned)
+
+
+def improveall(layout):
+    # double t while the step does not raise the energy
     n = 4
     t_curr = 0
     layout_curr = layout
@@ -196,7 +195,7 @@ def improveall(layout, temperature=0.0):
     while n > 0:
         layout_next = layout.step(t_next)
 
-        if not accept_layout_step(layout_curr.energy, layout_next.energy, temperature):
+        if layout_next.energy > layout_curr.energy:
             break
 
         t_curr = t_next
@@ -209,7 +208,7 @@ def improveall(layout, temperature=0.0):
     while n > 0:
         t_mid = (t_curr + t_next) / 2
         layout_mid = layout.step(t_mid)
-        if accept_layout_step(layout_curr.energy, layout_mid.energy, temperature):
+        if layout_mid.energy <= layout_curr.energy:
             layout_curr = layout_mid
             t_curr = t_mid
         else:
