@@ -139,6 +139,18 @@ def generalized_petersen(n, k):
 def petersen():
     return generalized_petersen(5, 2)
 
+def heawood():
+    '''
+        the points and the lines of the Fano plane, each point linked to the 3 lines through it:
+        a ring of 14 nodes, the even ones also linked to the node 5 steps further
+    '''
+    g = Graph(14)
+    for i in range(14):
+        g.add_edge(i, (i+1) % 14)
+        if i % 2 == 0:
+            g.add_edge(i, (i+5) % 14)
+    return g
+
 def dodecahedron():
     return generalized_petersen(10, 2)
 

@@ -1,6 +1,6 @@
 import pytest
 
-from graphs import cube, dodecahedron, icosahedron, octahedron, petersen, pipe, tetrahedron
+from graphs import cube, dodecahedron, heawood, icosahedron, octahedron, petersen, pipe, tetrahedron
 
 
 def degrees(graph):
@@ -120,3 +120,23 @@ def test_petersen_graph_pairs_have_one_common_neighbour_unless_linked():
         for node2 in range(node1 + 1, 10):
             common = set(graph.edges[node1]) & set(graph.edges[node2])
             assert len(common) == (0 if node2 in graph.edges[node1] else 1)
+
+
+def test_heawood_graph():
+    graph = heawood()
+    assert graph.nodecount == 14
+    assert edge_count(graph) == 21
+    assert degrees(graph) == [3] * 14
+    assert is_simple(graph)
+    assert is_connected(graph)
+
+
+def test_heawood_graph_is_the_fano_plane():
+    # even nodes are points, odd nodes are lines: every edge joins a point and a line,
+    # and any two points are on exactly one common line, any two lines meet in exactly one point
+    graph = heawood()
+    for node, neighbours in enumerate(graph.edges):
+        assert all((node - neighbour) % 2 == 1 for neighbour in neighbours)
+    for node1 in range(14):
+        for node2 in range(node1 + 2, 14, 2):
+            assert len(set(graph.edges[node1]) & set(graph.edges[node2])) == 1
