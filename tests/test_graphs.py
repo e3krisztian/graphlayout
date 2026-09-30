@@ -3,7 +3,7 @@ import itertools
 import pytest
 
 from graphs import (
-    cube, dodecahedron, hanoi, heawood, icosahedron, moser_spindle, octahedron, petersen, pipe,
+    cube, cube_stack, dodecahedron, hanoi, heawood, icosahedron, moser_spindle, octahedron, petersen, pipe,
     tetrahedron)
 
 
@@ -192,3 +192,23 @@ def test_moser_spindle_needs_4_colours():
 
     assert not any(proper(colours) for colours in itertools.product(range(3), repeat=7))
     assert any(proper(colours) for colours in itertools.product(range(4), repeat=7))
+
+
+def test_cube_stack_of_a_single_cube_is_a_cube():
+    graph = cube_stack(1, 1, 1)
+    assert graph.nodecount == 8
+    assert sorted(map(sorted, graph.edges)) == sorted(map(sorted, cube().edges))
+
+
+def test_cube_stack():
+    # 3 x 4 x 5 corners; the edges along the 3 directions
+    graph = cube_stack(2, 3, 4)
+    assert graph.nodecount == 60
+    assert edge_count(graph) == 2*4*5 + 3*3*5 + 3*4*4
+    assert is_simple(graph)
+    assert is_connected(graph)
+
+
+def test_cube_stack_nodes_lose_a_neighbour_for_each_side_of_the_block_they_are_on():
+    # 8 block corners, 24 corners inside block edges, 22 inside block faces, 6 inside the block
+    assert degrees(cube_stack(2, 3, 4)) == [3] * 8 + [4] * 24 + [5] * 22 + [6] * 6

@@ -151,6 +151,24 @@ def heawood():
             g.add_edge(i, (i+5) % 14)
     return g
 
+def cube_stack(width, depth, height):
+    '''
+        the corners and the edges of width x depth x height unit cubes stacked into a block
+
+        the corner at (x, y, z) is the node x + (width+1) * (y + (depth+1) * z)
+    '''
+    sizes = (width + 1, depth + 1, height + 1)
+    g = Graph(sizes[0] * sizes[1] * sizes[2])
+    steps = (1, sizes[0], sizes[0] * sizes[1])
+    for z in range(sizes[2]):
+        for y in range(sizes[1]):
+            for x in range(sizes[0]):
+                node = x + steps[1] * y + steps[2] * z
+                for coordinate, size, step in zip((x, y, z), sizes, steps):
+                    if coordinate + 1 < size:
+                        g.add_edge(node, node + step)
+    return g
+
 def moser_spindle():
     '''
         two rhombi of 2 triangles each, sharing a node at one end, their other ends linked
