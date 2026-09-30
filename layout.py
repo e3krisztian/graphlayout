@@ -213,6 +213,11 @@ def improveall(layout):
             t_curr = t_mid
         else:
             t_next = t_mid
+            layout_rejected = layout_mid
         n -= 1
 
+    # no step was accepted: take the smallest checked one, raising the energy,
+    # rather than getting stuck with the unchanged layout
+    if layout_curr is layout:
+        return layout_rejected
     return layout_curr

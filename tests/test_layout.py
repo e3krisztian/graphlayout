@@ -125,7 +125,8 @@ def test_delta_is_the_negative_gradient_of_the_energy():
 
 
 @pytest.mark.parametrize('seed', range(5))
-def test_improveall_does_not_raise_the_energy(seed):
+def test_improveall_does_not_raise_the_energy_when_a_checked_step_lowers_it(seed):
+    # in these layouts no nodes get so close that every checked step overshoots
     np.random.seed(seed)
     layout = GraphLayout(
         [[1, 2], [0, 2, 3], [0, 1], [1]], np.random.random((4, 2)) * 10)
@@ -161,3 +162,11 @@ def test_jittered_does_not_move_pinned_nodes():
 
 def test_jitter_is_due_when_the_square_root_of_the_steps_reaches_a_new_integer():
     assert [steps for steps in range(30) if jitter_due(steps)] == [1, 4, 9, 16, 25]
+
+
+def test_improveall_takes_the_smallest_checked_step_when_no_step_lowers_the_energy():
+    # nodes 0 and 2 are almost on top of each other, every checked step overshoots
+    layout = GraphLayout([[1], [0, 2], [1]], [[2.39, 3.87], [0.94, 3.5], [2.38, 3.87]])
+    smallest_step = layout.step(1 / 16)
+    assert smallest_step.energy > layout.energy
+    assert improveall(layout).locations.tolist() == smallest_step.locations.tolist()
