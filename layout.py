@@ -55,7 +55,7 @@ class GraphLayout:
             pinned = np.zeros(len(edges), dtype=bool)
         self.pinned = np.array(pinned, dtype=bool)
         assert self.pinned.shape == (len(edges),)
-        self.delta = self.calculate_delta()
+        self.delta, self.energy = self.calculate_delta_and_energy()
         self.tension = self.calculate_tension()
 
     def __str__(self):
@@ -64,19 +64,38 @@ class GraphLayout:
     def calculate_tension(self):
         return np.linalg.norm(self.delta, axis=COORDINATES).sum()
 
-    def calculate_delta(self):
+    def calculate_delta_and_energy(self):
+        '''
+            delta: the forces on the nodes
+            energy: the potential of these forces, delta is its negative gradient,
+                so a small enough step along delta always lowers it:
+                sum over edges of (d - EDGE_LENGTH)**2 / (4 * EDGE_LENGTH)
+                minus sum over node pairs of 2 * ln(d)
+        '''
         locations = self.locations
         assert_locations_shape(locations, length=len(self.edges))
         edges = self.edges
         delta = [None] * len(locations)
+        energy = 0.0
 
         for node, location in enumerate(locations):
+            loc_deltas = locations - location
+            distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
+
             # calculate attraction - along the edges
-            connected_locations = locations[edges[node]]
-            attraction = self.attraction(connected_locations - location)
+            attraction = self.attraction(loc_deltas[edges[node]])
+            # every edge is seen from both of its ends, hence 8 instead of 4
+            energy += ((distances[edges[node]] - EDGE_LENGTH) ** 2).sum() / (8 * EDGE_LENGTH)
 
             # calculate repulsion - an effect of all other nodes
-            repulsion = self.repulsion(locations - location, node)
+            # loc_deltas[node] is the node's delta to itself, [0, 0]: a non-zero
+            # distance turns its force into 0 instead of 0/0 and its energy into ln(1) = 0
+            distances[node] = 1
+            repulsion = self.repulsion(loc_deltas, distances)
+            # every pair is seen from both of its nodes, hence 1 instead of 2;
+            # nodes on top of each other have infinite energy
+            with np.errstate(divide='ignore'):
+                energy -= np.log(distances).sum()
 
             # set the new location
             delta[node] = attraction + repulsion
@@ -84,7 +103,7 @@ class GraphLayout:
         assert_locations_shape(result, length=len(self.edges))
         # pinned nodes do not move, and their unrelievable forces are left out of the tension
         result[self.pinned] = 0
-        return result
+        return result, energy
 
     def attraction(self, loc_deltas):
         assert_locations_shape(loc_deltas)
@@ -98,12 +117,8 @@ class GraphLayout:
         assert_point_shape(result)
         return result
 
-    def repulsion(self, loc_deltas, node):
+    def repulsion(self, loc_deltas, distances):
         assert_locations_shape(loc_deltas)
-        distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
-        # loc_deltas[node] is the node's delta to itself, [0, 0]: a non-zero
-        # distance turns its term into 0 instead of 0/0, without copying the array
-        distances[node] = 1
         distances_column = np.expand_dims(distances, axis=COORDINATES)
         repulsions = -2 * loc_deltas / distances_column ** 2
         result = np.nansum(repulsions, axis=NODES)
@@ -159,17 +174,17 @@ def target_temperature(layout, iteration):
     return layout.tension / 100.0
 
 
-def accept_layout_step(current_tension, candidate_tension, temperature):
+def accept_layout_step(current_energy, candidate_energy, temperature):
     '''
         Metropolis criterion: always accept an improvement; accept a worse
-        candidate with probability exp(-delta_tension / temperature), so
+        candidate with probability exp(-delta_energy / temperature), so
         temperature <= 0 recovers strict (never accept worse) behavior.
     '''
-    if candidate_tension <= current_tension:
+    if candidate_energy <= current_energy:
         return True
     if temperature <= 0:
         return False
-    return random.random() < math.exp(-(candidate_tension - current_tension) / temperature)
+    return random.random() < math.exp(-(candidate_energy - current_energy) / temperature)
 
 
 def improveall(layout, temperature=0.0):
@@ -181,7 +196,7 @@ def improveall(layout, temperature=0.0):
     while n > 0:
         layout_next = layout.step(t_next)
 
-        if not accept_layout_step(layout_curr.tension, layout_next.tension, temperature):
+        if not accept_layout_step(layout_curr.energy, layout_next.energy, temperature):
             break
 
         t_curr = t_next
@@ -194,7 +209,7 @@ def improveall(layout, temperature=0.0):
     while n > 0:
         t_mid = (t_curr + t_next) / 2
         layout_mid = layout.step(t_mid)
-        if accept_layout_step(layout_curr.tension, layout_mid.tension, temperature):
+        if accept_layout_step(layout_curr.energy, layout_mid.energy, temperature):
             layout_curr = layout_mid
             t_curr = t_mid
         else:

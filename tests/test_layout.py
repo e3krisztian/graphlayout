@@ -1,4 +1,7 @@
+import math
+
 import numpy as np
+import pytest
 
 from layout import EDGE_LENGTH, GraphLayout, improveall, randomized_layout, toggle_pin
 
@@ -88,3 +91,50 @@ def test_toggle_pin_pins_a_free_node_in_place():
 def test_toggle_pin_unpins_a_pinned_node():
     layout = toggle_pin(path_layout([False, False, True]), 2)
     assert layout.pinned.tolist() == [False, False, False]
+
+
+def test_energy_of_an_edge_of_ideal_length_is_the_repulsion_energy():
+    assert two_node_layout(EDGE_LENGTH).energy == pytest.approx(-2 * math.log(EDGE_LENGTH))
+
+
+def test_energy_of_a_stretched_edge():
+    stretch = 3
+    layout = two_node_layout(EDGE_LENGTH + stretch)
+    assert layout.energy == pytest.approx(
+        stretch ** 2 / (4 * EDGE_LENGTH) - 2 * math.log(EDGE_LENGTH + stretch))
+
+
+def test_energy_of_unconnected_nodes_is_the_repulsion_energy():
+    layout = GraphLayout([[], []], [[0, 0], [3, 4]])
+    assert layout.energy == pytest.approx(-2 * math.log(5))
+
+
+def test_delta_is_the_negative_gradient_of_the_energy():
+    layout = path_layout()
+    h = 1e-6
+    for node in range(3):
+        for axis in range(2):
+            locations = layout.locations.copy()
+            locations[node, axis] += h
+            moved = GraphLayout(layout.edges, locations)
+            gradient = (moved.energy - layout.energy) / h
+            assert -gradient == pytest.approx(layout.delta[node, axis], abs=1e-4)
+
+
+@pytest.mark.parametrize('seed', range(5))
+def test_improveall_does_not_raise_the_energy_at_zero_temperature(seed):
+    np.random.seed(seed)
+    layout = GraphLayout(
+        [[1, 2], [0, 2, 3], [0, 1], [1]], np.random.random((4, 2)) * 10)
+    for _ in range(20):
+        improved = improveall(layout)
+        assert improved.energy <= layout.energy
+        layout = improved
+
+
+def test_improveall_takes_a_step_that_lowers_the_energy_but_raises_the_tension():
+    # every step improveall tries along delta raises the tension of this layout
+    layout = GraphLayout([[1], [0, 2], [1]], [[2.0, 2.9], [0.2, 0.9], [4.9, 4.1]])
+    assert layout.step(1 / 16).tension > layout.tension
+    improved = improveall(layout)
+    assert improved.energy < layout.energy

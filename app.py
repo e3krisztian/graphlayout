@@ -11,7 +11,8 @@ import numpy as np
 from graphs import completegraph, tree, randomg, g1, g2, star, star2, pipe
 from layout import (
     X, Y, NODES, COORDINATES,
-    GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin, target_temperature, improveall,
+    GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin,
+    target_temperature, improveall,
 )
 from themes import DARK, LIGHT, strain_color
 
@@ -296,6 +297,9 @@ class App:
     LABELS_MAX_NODES = 100
     # moving the pointer more than this many pixels with a node grabbed drags it
     DRAG_DISTANCE = 3
+    # the layout's target temperature is scaled by this; with steps accepted by energy,
+    # a temperature above 0 only slowed down settling and led to no lower-energy layouts
+    TEMPERATURE_SCALE = 0
 
     def __init__(self):
         self.root = tkinter.Tk()
@@ -379,8 +383,11 @@ class App:
         # a new layout restarts the iteration count and the cooling
         self.layout = layout
         self.iteration = 1
-        self.temperature = target_temperature(layout, self.iteration)
+        self.temperature = self.target_temperature()
         self.wake()
+
+    def target_temperature(self):
+        return target_temperature(self.layout, self.iteration) * self.TEMPERATURE_SCALE
 
     def new_graph(self, graph):
         locations = randomized(circle_locations(graph.nodecount))
@@ -395,10 +402,10 @@ class App:
         self.set_layout(randomized_layout(self.layout))
 
     def set_pins(self, layout):
-        # a pin change keeps the iteration count, but heats up to the new layout's
-        # temperature: after unpinning, the nodes may be stuck at the old, lower one
+        # a pin change is new user input: it keeps the iteration count,
+        # but heats up to the new layout's temperature
         self.layout = layout
-        self.temperature = target_temperature(layout, self.iteration)
+        self.temperature = self.target_temperature()
         self.wake()
 
     def unpin_all(self):
@@ -475,17 +482,16 @@ class App:
         while self.running:
             if self.animating or self.step_requested:
                 self.step_requested = False
-                self.temperature = min(
-                    self.temperature, target_temperature(self.layout, self.iteration))
+                self.temperature = min(self.temperature, self.target_temperature())
                 self.layout = improveall(self.layout, self.temperature)
                 self.iteration += 1
             self.gcanvas.draw(
                 self.layout, DARK if self.dark.get() else LIGHT, self.labels.get())
             self.status.set(
-                'nodes=%d edges=%d pinned=%d  n=%4d  tension=%.5f  temperature=%.5f'
-                '  magnification=%.2f' % (
+                'nodes=%d edges=%d pinned=%d  n=%4d  energy=%.5f  tension=%.5f'
+                '  temperature=%.5f  magnification=%.2f' % (
                     len(self.layout.edges), self.edgecount, self.layout.pinned.sum(),
-                    self.iteration,
+                    self.iteration, self.layout.energy,
                     self.layout.tension, self.temperature, self.gcanvas.magnification))
             if self.animating:
                 sleep(0.01)
