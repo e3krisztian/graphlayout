@@ -2,8 +2,6 @@
 
 import math
 
-from layout import EDGE_LENGTH
-
 DARK = dict(
     background='#000000',
     node_fill='#d4d4d4',
@@ -26,8 +24,8 @@ LIGHT = dict(
     stretched='#dc2626',
 )
 
-# strain is log2(length / EDGE_LENGTH), edges 4 times longer or shorter than
-# the ideal get the full stretched or compressed color
+# strain is log2(length / reference), edges 4 times longer or shorter than
+# the reference get the full stretched or compressed color
 MAX_STRAIN = 2
 
 
@@ -41,10 +39,10 @@ def mix(color1, color2, ratio):
         round(c1 + (c2 - c1) * ratio) for c1, c2 in zip(rgb(color1), rgb(color2)))
 
 
-def strain_color(length, theme):
+def strain_color(length, reference, theme):
     if length <= 0:
         strain = -MAX_STRAIN
     else:
-        strain = max(-MAX_STRAIN, min(MAX_STRAIN, math.log2(length / EDGE_LENGTH)))
+        strain = max(-MAX_STRAIN, min(MAX_STRAIN, math.log2(length / reference)))
     end_color = theme['stretched'] if strain > 0 else theme['compressed']
     return mix(theme['ideal'], end_color, abs(strain) / MAX_STRAIN)

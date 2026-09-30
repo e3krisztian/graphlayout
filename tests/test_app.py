@@ -82,16 +82,27 @@ def test_labels_are_the_node_numbers():
     assert texts == ['0', '1', '2']
 
 
-def test_edge_of_ideal_length_is_drawn_in_the_ideal_color():
-    layout = GraphLayout([[1], [0]], [[0, 0], [EDGE_LENGTH, 0]])
-    canvas = draw(layout, LIGHT, LABELS_OFF)
-    assert canvas.items[0] == ('line', dict(fill=LIGHT['ideal'], width=2))
+def edge_fills(canvas):
+    return [options['fill'] for kind, options in canvas.items if kind == 'line']
 
 
-def test_edge_of_4_times_the_ideal_length_is_drawn_in_the_stretched_color():
-    layout = GraphLayout([[1], [0]], [[0, 0], [0, EDGE_LENGTH * 4]])
+def test_edges_are_colored_relative_to_the_median_edge_length():
+    # path 0-1-2-3 with edges of length 1, 1 and 4 - the median is 1
+    layout = GraphLayout([[1], [0, 2], [1, 3], [2]], [[0, 0], [1, 0], [2, 0], [6, 0]])
     canvas = draw(layout, DARK, LABELS_OFF)
-    assert canvas.items[0][1]['fill'] == DARK['stretched']
+    assert edge_fills(canvas) == [DARK['ideal'], DARK['ideal'], DARK['stretched']]
+
+
+def test_edges_longer_than_edge_length_are_ideal_when_all_are_equal():
+    # a settled layout has all edges longer than EDGE_LENGTH, due to repulsion
+    layout = GraphLayout([[1], [0]], [[0, 0], [0, EDGE_LENGTH * 4]])
+    canvas = draw(layout, LIGHT, LABELS_OFF)
+    assert edge_fills(canvas) == [LIGHT['ideal']]
+
+
+def test_graph_without_edges_is_drawn():
+    layout = GraphLayout([[], []], [[0, 0], [1, 1]])
+    assert kinds(draw(layout, DARK, LABELS_OFF)) == ['oval'] * 2
 
 
 def test_background_follows_the_theme():

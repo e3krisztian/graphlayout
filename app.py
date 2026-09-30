@@ -1,6 +1,7 @@
 # GUI app: shows a graph while its layout is being improved
 
 import math
+import statistics
 import tkinter
 import tkinter.font
 from time import sleep
@@ -85,15 +86,21 @@ class GraphCanvas:
                 self.draw_dots(points, theme)
 
     def draw_edges(self, edges, points, theme):
-        m = self.magnification
-        width = 2 if m > 10 else 1
-        for node, (x1, y1) in enumerate(points):
-            for dest in edges[node]:
-                if node < dest:
-                    x2, y2 = points[dest]
-                    length = math.hypot(x2 - x1, y2 - y1) / m
-                    self.canvas.create_line(
-                        x1, y1, x2, y2, fill=strain_color(length, theme), width=width)
+        width = 2 if self.magnification > 10 else 1
+        lines = [
+            (points[node], points[dest])
+            for node in range(len(points)) for dest in edges[node] if node < dest]
+        # canvas lengths: the magnification cancels out in length / reference
+        lengths = [math.dist(p1, p2) for p1, p2 in lines]
+        if not lengths:
+            return
+        # colored relative to the median edge, as repulsion keeps all edges
+        # longer than EDGE_LENGTH even in a settled layout
+        # (at least a pixel, for when most nodes are on top of each other)
+        reference = max(statistics.median(lengths), 1)
+        for ((x1, y1), (x2, y2)), length in zip(lines, lengths):
+            self.canvas.create_line(
+                x1, y1, x2, y2, fill=strain_color(length, reference, theme), width=width)
 
     def draw_dots(self, points, theme):
         r = max(self.DOT_SIZE * self.magnification, self.MIN_DOT_SIZE) / 2
