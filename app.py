@@ -275,17 +275,27 @@ class App:
         # the last choice of drawing the labels, for graphs that start with labels
         self.label_order = LABELS_ABOVE
         self.pipe_parameters = (10, 10, False)
+        # written to end the wait for events while the animation is stopped
+        self.wakeup = tkinter.IntVar()
+        self.animating = True
+        # a single step of the stopped animation is to be done
+        self.step_requested = False
+        self.running = True
         self.create_statusline(statusline)
         self.create_toolbar()
+        # the stopped animation has to follow the size of the window
+        self.canvas.bind('<Configure>', lambda event: self.wake())
+        # closing the window while waiting for events would leave the process waiting forever
+        self.root.protocol('WM_DELETE_WINDOW', self.exit)
 
-        self.running = True
         self.new_graph(pipe(10, 10))
 
     def create_statusline(self, statusline):
         tkinter.Label(statusline, textvariable=self.status, font='TkFixedFont').pack(
             side=tkinter.LEFT)
-        tkinter.Checkbutton(statusline, text="Dark", variable=self.dark).pack(
-            side=tkinter.RIGHT, padx=10)
+        tkinter.Checkbutton(
+            statusline, text="Dark", variable=self.dark, command=self.wake).pack(
+                side=tkinter.RIGHT, padx=10)
         for text, value in [
                 ("above edges", LABELS_ABOVE), ("below edges", LABELS_BELOW), ("off", LABELS_OFF)]:
             tkinter.Radiobutton(
@@ -297,6 +307,11 @@ class App:
         tkinter.Button(self.toolbar, text="Exit", command=self.exit).pack(side=tkinter.LEFT)
         tkinter.Button(self.toolbar, text="Randomize", command=self.randomize).pack(
             side=tkinter.LEFT)
+        # wide enough for both of its texts
+        self.animation_button = tkinter.Button(
+            self.toolbar, text="Stop", width=5, command=self.toggle_animation)
+        self.animation_button.pack(side=tkinter.LEFT)
+        tkinter.Button(self.toolbar, text="Step", command=self.step).pack(side=tkinter.LEFT)
         for name, columns, graphs in reversed(GRAPH_GROUPS):
             buttons = [
                 (text, lambda create_graph=create_graph: self.new_graph(create_graph()))
@@ -314,6 +329,7 @@ class App:
         self.layout = layout
         self.iteration = 1
         self.temperature = target_temperature(layout, self.iteration)
+        self.wake()
 
     def new_graph(self, graph):
         locations = randomized(circle_locations(graph.nodecount))
@@ -330,6 +346,7 @@ class App:
     def labels_selected(self):
         if self.labels.get() != LABELS_OFF:
             self.label_order = self.labels.get()
+        self.wake()
 
     def open_pipe_dialog(self):
         PipeDialog(self.root, self.pipe_parameters, self.new_pipe)
@@ -338,8 +355,25 @@ class App:
         self.pipe_parameters = (nodes_per_circle, length, closed)
         self.new_graph(pipe(nodes_per_circle, length, closed))
 
+    def toggle_animation(self):
+        self.set_animating(not self.animating)
+
+    def set_animating(self, animating):
+        self.animating = animating
+        self.animation_button.configure(text="Stop" if animating else "Start")
+        self.wake()
+
+    def step(self):
+        # one step only, then stop
+        self.step_requested = True
+        self.set_animating(False)
+
+    def wake(self):
+        self.wakeup.set(0)
+
     def exit(self):
         self.running = False
+        self.wake()
 
     def run(self):
         # map the window, so the canvas has its real size before the first draw
@@ -347,19 +381,25 @@ class App:
         raise_and_focus(self.root)
 
         while self.running:
-            self.temperature = min(
-                self.temperature, target_temperature(self.layout, self.iteration))
+            if self.animating or self.step_requested:
+                self.step_requested = False
+                self.temperature = min(
+                    self.temperature, target_temperature(self.layout, self.iteration))
+                self.layout = improveall(self.layout, self.temperature)
+                self.iteration += 1
+            self.gcanvas.draw(
+                self.layout, DARK if self.dark.get() else LIGHT, self.labels.get())
             self.status.set(
                 'nodes=%d edges=%d  n=%4d  tension=%.5f  temperature=%.5f  magnification=%.2f' % (
                     len(self.layout.edges), self.edgecount, self.iteration,
                     self.layout.tension, self.temperature, self.gcanvas.magnification))
-            self.layout = improveall(self.layout, self.temperature)
-            self.iteration += 1
-            self.gcanvas.draw(
-                self.layout, DARK if self.dark.get() else LIGHT, self.labels.get())
-            sleep(0.01)
-            # update native window & process events
-            self.canvas.update()
+            if self.animating:
+                sleep(0.01)
+                # update native window & process events
+                self.canvas.update()
+            else:
+                # no work until an event changes what is to be drawn
+                self.root.wait_variable(self.wakeup)
 
 
 def main():
