@@ -9,12 +9,13 @@ from time import sleep
 import numpy as np
 
 from graphs import (
-    completegraph, tree, randomg, g1, g2, star, star2, pipe, petersen, heawood, moser_spindle, hanoi, cube_stack, eiffel_tower,
+    completegraph, tree, randomg, g1, g2, star, star2, pipe,
+    petersen, heawood, moser_spindle, hanoi, cube_stack, eiffel_tower,
     tetrahedron, cube, octahedron, dodecahedron, icosahedron)
 from layout import (
     X, Y, NODES, COORDINATES,
     GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin,
-    improveall, jitter_due, jittered,
+    improved, jitter_due, jittered,
 )
 from themes import DARK, LIGHT, strain_color
 
@@ -494,7 +495,7 @@ class App:
                 self.steps_since_input += 1
                 if jitter_due(self.steps_since_input):
                     self.layout = jittered(self.layout)
-                self.layout = improveall(self.layout)
+                self.layout = improved(self.layout)
                 self.iteration += 1
             self.gcanvas.draw(
                 self.layout, DARK if self.dark.get() else LIGHT, self.labels.get())

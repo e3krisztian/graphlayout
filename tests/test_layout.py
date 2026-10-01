@@ -5,7 +5,7 @@ import pytest
 
 from layout import (
     EDGE_LENGTH, JITTER,
-    GraphLayout, improveall, jitter_due, jittered, randomized_layout, toggle_pin,
+    GraphLayout, improved, jitter_due, jittered, randomized_layout, toggle_pin,
 )
 
 
@@ -48,8 +48,8 @@ def test_step_does_not_move_pinned_nodes():
     assert layout.pinned.tolist() == [True, False, True]
 
 
-def test_improveall_does_not_move_pinned_nodes():
-    layout = improveall(path_layout([False, True, False]))
+def test_improved_does_not_move_pinned_nodes():
+    layout = improved(path_layout([False, True, False]))
     assert layout.locations[1].tolist() == [10, 0]
     assert layout.pinned.tolist() == [False, True, False]
 
@@ -125,23 +125,23 @@ def test_delta_is_the_negative_gradient_of_the_energy():
 
 
 @pytest.mark.parametrize('seed', range(5))
-def test_improveall_does_not_raise_the_energy_when_a_checked_step_lowers_it(seed):
+def test_improved_does_not_raise_the_energy_when_a_checked_step_lowers_it(seed):
     # in these layouts no nodes get so close that every checked step overshoots
     np.random.seed(seed)
     layout = GraphLayout(
         [[1, 2], [0, 2, 3], [0, 1], [1]], np.random.random((4, 2)) * 10)
     for _ in range(20):
-        improved = improveall(layout)
-        assert improved.energy <= layout.energy
-        layout = improved
+        improved_layout = improved(layout)
+        assert improved_layout.energy <= layout.energy
+        layout = improved_layout
 
 
-def test_improveall_takes_a_step_that_lowers_the_energy_but_raises_the_tension():
-    # every step improveall tries along delta raises the tension of this layout
+def test_improved_takes_a_step_that_lowers_the_energy_but_raises_the_tension():
+    # every step improved tries along delta raises the tension of this layout
     layout = GraphLayout([[1], [0, 2], [1]], [[2.0, 2.9], [0.2, 0.9], [4.9, 4.1]])
     assert layout.step(1 / 16).tension > layout.tension
-    improved = improveall(layout)
-    assert improved.energy < layout.energy
+    improved_layout = improved(layout)
+    assert improved_layout.energy < layout.energy
 
 
 def test_jittered_moves_free_coordinates_by_minus_one_zero_or_one_jitter():
@@ -164,9 +164,9 @@ def test_jitter_is_due_when_the_square_root_of_the_steps_reaches_a_new_integer()
     assert [steps for steps in range(30) if jitter_due(steps)] == [1, 4, 9, 16, 25]
 
 
-def test_improveall_takes_the_smallest_checked_step_when_no_step_lowers_the_energy():
+def test_improved_takes_the_smallest_checked_step_when_no_step_lowers_the_energy():
     # nodes 0 and 2 are almost on top of each other, every checked step overshoots
     layout = GraphLayout([[1], [0, 2], [1]], [[2.39, 3.87], [0.94, 3.5], [2.38, 3.87]])
     smallest_step = layout.step(1 / 16)
     assert smallest_step.energy > layout.energy
-    assert improveall(layout).locations.tolist() == smallest_step.locations.tolist()
+    assert improved(layout).locations.tolist() == smallest_step.locations.tolist()

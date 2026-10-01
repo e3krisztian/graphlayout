@@ -186,7 +186,12 @@ def jittered(layout):
     return GraphLayout(layout.edges, layout.locations + jitter, layout.pinned)
 
 
-def improveall(layout):
+def improved(layout):
+    '''
+        create a new layout one step along delta, searching for a step size that lowers the energy:
+        doubling it, then bisecting; in the rare case that no checked step lowers the energy,
+        the smallest one is taken
+    '''
     # double t while the step does not raise the energy
     n = 4
     t_curr = 0
