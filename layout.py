@@ -383,11 +383,14 @@ class GraphLayout:
         return self.moved(self.locations, np.zeros(len(self.edges), dtype=bool))
 
 
-def randomized_layout(layout):
-    # pinned nodes stay in place
+def relocated(layout, locations):
+    # the free nodes moved to locations, pinned nodes stay in place
     pinned_column = np.expand_dims(layout.pinned, axis=COORDINATES)
-    locations = np.where(pinned_column, layout.locations, randomized(layout.locations))
-    return layout.moved(locations)
+    return layout.moved(np.where(pinned_column, layout.locations, locations))
+
+
+def randomized_layout(layout):
+    return relocated(layout, randomized(layout.locations))
 
 
 def toggle_pin(layout, node):

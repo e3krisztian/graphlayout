@@ -5,7 +5,7 @@ import pytest
 
 from layout import (
     EDGE_LENGTH, JITTER, INFLATE, DENSE, STRESS, Inflate,
-    GraphLayout, PowerLaw, Stress, attraction, hop_counts, improved, jitter_due, jittered, randomized_layout, step_move_limit,
+    GraphLayout, PowerLaw, Stress, attraction, relocated, hop_counts, improved, jitter_due, jittered, randomized_layout, step_move_limit,
     toggle_pin,
 )
 
@@ -454,3 +454,11 @@ def test_with_model_binds_the_new_model():
     changed = layout.with_model(DENSE)
     assert changed.field is not layout.field
     assert changed.field.model == DENSE
+
+
+def test_relocated_moves_the_free_nodes_and_keeps_the_pinned_ones():
+    layout = path_layout([False, True, False])
+    locations = [[1, 1], [2, 2], [3, 3]]
+    moved = relocated(layout, locations)
+    assert moved.locations.tolist() == [[1, 1], layout.locations[1].tolist(), [3, 3]]
+    assert moved.pinned.tolist() == [False, True, False]

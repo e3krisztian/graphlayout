@@ -9,6 +9,7 @@ from time import sleep
 
 import numpy as np
 
+from bubble_tree import bubble_tree_locations
 from graphs import (
     completegraph, tree, randomg, g1, g2, star, star2, pipe,
     petersen, heawood, moser_spindle, hanoi, cube_stack, eiffel_tower,
@@ -16,7 +17,7 @@ from graphs import (
     tetrahedron, cube, octahedron, dodecahedron, icosahedron)
 from layout import (
     X, Y, NODES, COORDINATES, INFLATE, DENSE, STRESS, Inflate, PowerLaw, Stress,
-    GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin,
+    GraphLayout, circle_locations, randomized, randomized_layout, relocated, toggle_pin,
     improved, jitter_due, jittered,
 )
 from themes import DARK, LIGHT, strain_color
@@ -267,6 +268,17 @@ class PipeDialog:
         self.window.destroy()
 
 
+# (start menu entry, the (n, 2) locations a graph starts from, given its edges)
+STARTS = [
+    ("Random", lambda edges: randomized(circle_locations(len(edges)))),
+    ("Bubble tree", bubble_tree_locations),
+]
+
+
+def start_locations(name, edges):
+    return dict(STARTS)[name](edges)
+
+
 # the preset menu shows this for a model that matches no preset
 CUSTOM = "Custom"
 
@@ -391,6 +403,8 @@ class App:
         # the last choice of drawing the labels, for graphs that start with labels
         self.label_order = LABELS_ABOVE
         self.pipe_parameters = (10, 10, False)
+        # the start menu's entry for the locations of new layouts
+        self.start = tkinter.StringVar(value=STARTS[0][0])
         # the model of the forces of new layouts, and of the current one
         self.model = INFLATE
         # written to end the wait for events while the animation is stopped
@@ -438,6 +452,7 @@ class App:
         tkinter.Button(self.toolbar, text="Step", command=self.step).pack(side=tkinter.LEFT)
         tkinter.Button(self.toolbar, text="Unpin all", command=self.unpin_all).pack(
             side=tkinter.LEFT)
+        self.create_start_group()
         self.create_forces_group()
         for name, graphs in reversed(GRAPH_GROUPS):
             buttons = [
@@ -451,6 +466,13 @@ class App:
             for i, (text, command) in enumerate(buttons):
                 tkinter.Button(group, text=text, command=command).grid(
                     row=i // columns, column=i % columns, sticky=tkinter.EW)
+
+    def create_start_group(self):
+        group = tkinter.LabelFrame(self.toolbar, text="Start")
+        group.pack(side=tkinter.LEFT, anchor=tkinter.N, padx=2)
+        tkinter.OptionMenu(
+            group, self.start, *[name for name, locations in STARTS],
+            command=self.start_selected).pack()
 
     def create_forces_group(self):
         group = tkinter.LabelFrame(self.toolbar, text="Forces")
@@ -534,13 +556,17 @@ class App:
         self.wake()
 
     def new_graph(self, graph):
-        locations = randomized(circle_locations(graph.nodecount))
+        locations = start_locations(self.start.get(), graph.edges)
         self.set_layout(GraphLayout(graph.edges, locations, model=self.model))
         self.edgecount = sum(len(neighbours) for neighbours in graph.edges) // 2
         if graph.nodecount > self.LABELS_MAX_NODES:
             self.labels.set(LABELS_OFF)
         else:
             self.labels.set(self.label_order)
+
+    def start_selected(self, name):
+        # the current graph starts again from the picked locations, pinned nodes stay
+        self.set_layout(relocated(self.layout, start_locations(name, self.layout.edges)))
 
     def randomize(self):
         self.set_layout(randomized_layout(self.layout))

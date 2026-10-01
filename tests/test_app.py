@@ -3,9 +3,10 @@ import dataclasses
 import pytest
 
 from app import (
-    GraphCanvas, KNOBS, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, centered_position,
-    model_with_knob, preset_name,
+    GraphCanvas, KNOBS, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, STARTS, centered_position,
+    model_with_knob, preset_name, start_locations,
 )
+from bubble_tree import bubble_tree_locations
 from layout import EDGE_LENGTH, INFLATE, DENSE, STRESS, Inflate, GraphLayout, PowerLaw
 from themes import DARK, LIGHT
 
@@ -216,3 +217,14 @@ def test_preset_name_is_custom_for_other_models():
 def test_knobs_list_the_fields_of_the_model(model_type):
     fields = [field.name for field in dataclasses.fields(model_type)]
     assert [knob[0] for knob in KNOBS[model_type]] == fields
+
+
+@pytest.mark.parametrize('name', [name for name, locations in STARTS])
+def test_start_locations_give_a_location_to_every_node(name):
+    edges = [[1], [0, 2], [1], []]
+    assert start_locations(name, edges).shape == (4, 2)
+
+
+def test_bubble_tree_start_is_the_bubble_tree():
+    edges = [[1], [0, 2], [1], []]
+    assert start_locations("Bubble tree", edges).tolist() == bubble_tree_locations(edges).tolist()
