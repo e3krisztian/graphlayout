@@ -447,13 +447,15 @@ class App:
         self.knobs = {}
         # field name: the broken constraint of the knob, or None
         self.knob_messages = {}
-        for row, (field, text, minimum) in enumerate(
-                [('strength', "Strength", 0), ('exponent', "Exponent", 0.1)], start=1):
+        # neither knob has a natural upper bound: the arrows stop at a value well above
+        # the presets, where a large exponent does not yet overflow the powers of the distances;
+        # larger values can still be typed
+        for row, (field, text, minimum, maximum) in enumerate(
+                [('strength', "Strength", 0, 10), ('exponent', "Exponent", 0.1, 10)], start=1):
             variable = tkinter.StringVar(value=getattr(self.model, field))
             tkinter.Label(group, text=text).grid(row=row, column=0, sticky=tkinter.E, padx=5)
-            # neither knob has a natural upper bound, the arrows stop at 1000
             spinbox = tkinter.Spinbox(
-                group, from_=minimum, to=1000, increment=0.1, textvariable=variable, width=6)
+                group, from_=minimum, to=maximum, increment=0.1, textvariable=variable, width=6)
             spinbox.grid(row=row, column=1, sticky=tkinter.W, pady=2)
             self.knobs[field] = (variable, spinbox, spinbox.cget('foreground'))
             self.knob_messages[field] = None
