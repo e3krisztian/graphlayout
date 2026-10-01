@@ -3,8 +3,8 @@ import itertools
 import pytest
 
 from graphs import (
-    cube, cube_stack, dodecahedron, hanoi, heawood, icosahedron, moser_spindle, octahedron, petersen, pipe,
-    tetrahedron)
+    cube, cube_stack, dodecahedron, eiffel_tower, hanoi, heawood, icosahedron, moser_spindle,
+    octahedron, petersen, pipe, tetrahedron)
 
 
 def degrees(graph):
@@ -212,3 +212,14 @@ def test_cube_stack():
 def test_cube_stack_nodes_lose_a_neighbour_for_each_side_of_the_block_they_are_on():
     # 8 block corners, 24 corners inside block edges, 22 inside block faces, 6 inside the block
     assert degrees(cube_stack(2, 3, 4)) == [3] * 8 + [4] * 24 + [5] * 22 + [6] * 6
+
+
+def test_eiffel_tower():
+    graph = eiffel_tower()
+    assert 200 <= graph.nodecount <= 1000
+    assert is_simple(graph)
+    assert is_connected(graph)
+
+
+def test_eiffel_tower_ends_in_a_single_spire_tip():
+    assert degrees(eiffel_tower()).count(1) == 1

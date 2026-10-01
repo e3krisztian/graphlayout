@@ -9,7 +9,7 @@ from time import sleep
 import numpy as np
 
 from graphs import (
-    completegraph, tree, randomg, g1, g2, star, star2, pipe, petersen, heawood, moser_spindle, hanoi, cube_stack,
+    completegraph, tree, randomg, g1, g2, star, star2, pipe, petersen, heawood, moser_spindle, hanoi, cube_stack, eiffel_tower,
     tetrahedron, cube, octahedron, dodecahedron, icosahedron)
 from layout import (
     X, Y, NODES, COORDINATES,
@@ -282,6 +282,7 @@ GRAPH_GROUPS = [
         ("Hanoi3", lambda: hanoi(3)),
         ("Cubes234", lambda: cube_stack(2, 3, 4)),
         ("Cubes345", lambda: cube_stack(3, 4, 5)),
+        ("Eiffel", eiffel_tower),
     ]),
     ("Platonic", 3, [
         ("Tetra", tetrahedron),

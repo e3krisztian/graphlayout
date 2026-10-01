@@ -169,6 +169,88 @@ def cube_stack(width, depth, height):
                         g.add_edge(node, node + step)
     return g
 
+def eiffel_tower():
+    '''
+        a wireframe of the Eiffel tower, built of square lattice trusses
+
+        4 legs rise from the ground, linked by girders at the first and the second platform;
+        above the second platform the legs join into a single shaft, topped by a spire
+
+        in a leg's square, corner 0 faces the centre of the tower, corner 1 the next leg,
+        corner 2 the outside, corner 3 the previous leg
+    '''
+    legs = 4
+    # levels of the legs; the platforms are at these levels
+    leg_levels = 18
+    platforms = [9, 17]
+    # nodes between two legs on a platform girder rail
+    girder_nodes = 4
+    shaft_levels = 16
+    spire_nodes = 4
+
+    edges = []
+    nodecount = 0
+
+    def new_nodes(count):
+        nonlocal nodecount
+        nodecount += count
+        return list(range(nodecount - count, nodecount))
+
+    def truss(squares):
+        '''
+            squares of 4 nodes, one above the other: the sides of each square,
+            the verticals between neighbouring squares and a zigzag of diagonals on each face
+        '''
+        for level, square in enumerate(squares):
+            for corner in range(4):
+                edges.append((square[corner], square[(corner+1) % 4]))
+            if level > 0:
+                below = squares[level - 1]
+                for corner in range(4):
+                    next_corner = (corner+1) % 4
+                    edges.append((below[corner], square[corner]))
+                    if level % 2:
+                        edges.append((below[corner], square[next_corner]))
+                    else:
+                        edges.append((below[next_corner], square[corner]))
+
+    def rail(start, end):
+        '''a path of girder_nodes new nodes from start to end, returned with its ends'''
+        path = [start] + new_nodes(girder_nodes) + [end]
+        edges.extend(zip(path, path[1:]))
+        return path
+
+    leg_squares = [[new_nodes(4) for _ in range(leg_levels)] for _ in range(legs)]
+    for squares in leg_squares:
+        truss(squares)
+
+    for level in platforms:
+        for leg in range(legs):
+            here = leg_squares[leg][level]
+            there = leg_squares[(leg+1) % legs][level]
+            # the inner rail links the inner corners, the outer rail the facing side corners
+            inner = rail(here[0], there[0])
+            outer = rail(here[1], there[3])
+            for node1, node2 in zip(inner[1:-1], outer[1:-1]):
+                edges.append((node1, node2))
+
+    shaft_squares = [new_nodes(4) for _ in range(shaft_levels)]
+    truss(shaft_squares)
+    # each corner of the shaft's bottom square stands on the top square of a leg
+    for leg, node in enumerate(shaft_squares[0]):
+        for leg_node in leg_squares[leg][-1]:
+            edges.append((node, leg_node))
+
+    spire = new_nodes(spire_nodes)
+    for node in shaft_squares[-1]:
+        edges.append((node, spire[0]))
+    edges.extend(zip(spire, spire[1:]))
+
+    g = Graph(nodecount)
+    for node1, node2 in edges:
+        g.add_edge(node1, node2)
+    return g
+
 def moser_spindle():
     '''
         two rhombi of 2 triangles each, sharing a node at one end, their other ends linked
