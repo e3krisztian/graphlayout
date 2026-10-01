@@ -269,9 +269,12 @@ class PipeDialog:
 
 PIPES = "Pipes"
 
-# (group name, buttons in a row, [(button text, graph creator)])
+# rows of buttons in each group of graphs, the groups get as many columns as they need
+GRAPH_ROWS = 3
+
+# (group name, [(button text, graph creator)])
 GRAPH_GROUPS = [
-    ("Small", 3, [
+    ("Small", [
         ("g1", g1),
         ("g2", g2),
         ("Random", lambda: randomg(20, 50)),
@@ -279,7 +282,7 @@ GRAPH_GROUPS = [
         ("Star2", lambda: star2(50)),
         ("Complete", lambda: completegraph(40)),
     ]),
-    ("Named", 4, [
+    ("Named", [
         ("Petersen", petersen),
         ("Heawood", heawood),
         ("Moser", moser_spindle),
@@ -289,19 +292,19 @@ GRAPH_GROUPS = [
         ("Eiffel", eiffel_tower),
         ("Eiffel2", eiffel_tower_front),
     ]),
-    ("Platonic", 3, [
+    ("Platonic", [
         ("Tetra", tetrahedron),
         ("Cube", cube),
         ("Octa", octahedron),
         ("Dodeca", dodecahedron),
         ("Icosa", icosahedron),
     ]),
-    ("Trees", 2, [
+    ("Trees", [
         ("T 40", lambda: tree(40)),
         ("T 100", lambda: tree(100)),
         ("T 200", lambda: tree(200)),
     ]),
-    (PIPES, 4, [
+    (PIPES, [
         ("Ring", lambda: pipe(20, 5)),
         ("Ring400", lambda: pipe(40, 10)),
         ("Pipe", lambda: pipe(10, 10)),
@@ -385,12 +388,13 @@ class App:
         tkinter.Button(self.toolbar, text="Step", command=self.step).pack(side=tkinter.LEFT)
         tkinter.Button(self.toolbar, text="Unpin all", command=self.unpin_all).pack(
             side=tkinter.LEFT)
-        for name, columns, graphs in reversed(GRAPH_GROUPS):
+        for name, graphs in reversed(GRAPH_GROUPS):
             buttons = [
                 (text, lambda create_graph=create_graph: self.new_graph(create_graph()))
                 for text, create_graph in graphs]
             if name == PIPES:
                 buttons.append(("Custom...", self.open_pipe_dialog))
+            columns = math.ceil(len(buttons) / GRAPH_ROWS)
             group = tkinter.LabelFrame(self.toolbar, text=name)
             group.pack(side=tkinter.RIGHT, anchor=tkinter.N, padx=2)
             for i, (text, command) in enumerate(buttons):
