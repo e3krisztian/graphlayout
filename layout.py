@@ -196,6 +196,9 @@ class GraphLayout:
         return GraphLayout(self.edges, locations, pinned, self.model)
 
     def with_model(self, model):
+        '''
+            create a layout of the same graph, locations and pins with another model
+        '''
         return GraphLayout(self.edges, self.locations, self.pinned, model)
 
     def step(self, t):
