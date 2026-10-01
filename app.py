@@ -51,9 +51,9 @@ LABELS_OFF, LABELS_BELOW, LABELS_ABOVE = 'off', 'below', 'above'
 
 
 class GraphCanvas:
-    # space around the outermost nodes, in layout units, for the node dots and labels
+    # space around the outermost nodes, in layout units, for the node dots and labels;
+    # it also bounds the magnification: the view fits at least 2 * PADDING
     PADDING = 5
-    MAX_MAGNIFICATION = 50.
     # sizes in layout units, with their minimum in pixels
     DOT_SIZE, MIN_DOT_SIZE = 0.6, 3
     LABEL_HEIGHT, MIN_LABEL_HEIGHT = 0.7, 6
@@ -95,8 +95,7 @@ class GraphCanvas:
         low = locations.min(axis=NODES) - self.PADDING
         high = locations.max(axis=NODES) + self.PADDING
         extent = high - low
-        self.magnification = min(
-            canvas_width / extent[X], canvas_height / extent[Y], self.MAX_MAGNIFICATION)
+        self.magnification = min(canvas_width / extent[X], canvas_height / extent[Y])
         self.center = (low + high) / 2
 
     def draw(self, glayout, theme, labels):

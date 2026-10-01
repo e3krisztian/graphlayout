@@ -161,6 +161,12 @@ def test_view_is_fitted_again_when_unfrozen():
     assert gcanvas.to_canvas([1, 1]) != pytest.approx(before)
 
 
+def test_a_single_node_fills_the_canvas_with_its_padding():
+    gcanvas = drawn_canvas(GraphLayout([[]], [[3, 4]]))
+    # the 800 pixel height fits the 2 * PADDING around the node
+    assert gcanvas.magnification == pytest.approx(800 / (2 * GraphCanvas.PADDING))
+
+
 def test_pinned_dots_have_the_pinned_color():
     canvas = draw(triangle().pinned_at(1, [2, 0]), DARK, LABELS_OFF)
     fills = [options['fill'] for kind, options in canvas.items if kind == 'oval']
