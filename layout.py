@@ -57,8 +57,10 @@ class PowerLaw:
         '''
         assert_locations_shape(loc_deltas)
         distances_column = np.expand_dims(distances, axis=COORDINATES)
-        # loc_deltas / distances is the unit vector towards the other node
-        repulsions = -self.strength * loc_deltas / distances_column ** (self.exponent + 1)
+        # loc_deltas / distances is the unit vector towards the other node;
+        # a node on the same spot has no direction: its 0/0 is dropped by nansum
+        with np.errstate(invalid='ignore'):
+            repulsions = -self.strength * loc_deltas / distances_column ** (self.exponent + 1)
         result = np.nansum(repulsions, axis=NODES)
         assert_point_shape(result)
         return result
@@ -171,10 +173,12 @@ class GraphLayout:
         assert_locations_shape(loc_deltas)
         distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
         distances_column = np.expand_dims(distances, axis=COORDINATES)
-        attractions = (
-            (distances_column - EDGE_LENGTH) * loc_deltas
-            / (2 * distances_column * EDGE_LENGTH)
-        )
+        # a neighbour on the same spot has no direction: its 0/0 is dropped by nansum
+        with np.errstate(invalid='ignore'):
+            attractions = (
+                (distances_column - EDGE_LENGTH) * loc_deltas
+                / (2 * distances_column * EDGE_LENGTH)
+            )
         result = np.nansum(attractions, axis=NODES)
         assert_point_shape(result)
         return result
@@ -253,6 +257,12 @@ def jittered(layout):
     return layout.moved(layout.locations + jitter)
 
 
+def lowers_or_keeps_energy(layout_new, layout_old):
+    # a step to an infinite energy is never taken: inf <= inf would take every step
+    # of a layout with nodes on top of each other, and the largest checked one at that
+    return math.isfinite(layout_new.energy) and layout_new.energy <= layout_old.energy
+
+
 def improved(layout):
     '''
         create a new layout one step along delta, searching for a step size that lowers the energy:
@@ -267,7 +277,7 @@ def improved(layout):
     while n > 0:
         layout_next = layout.step(t_next)
 
-        if layout_next.energy > layout_curr.energy:
+        if not lowers_or_keeps_energy(layout_next, layout_curr):
             break
 
         t_curr = t_next
@@ -280,7 +290,7 @@ def improved(layout):
     while n > 0:
         t_mid = (t_curr + t_next) / 2
         layout_mid = layout.step(t_mid)
-        if layout_mid.energy <= layout_curr.energy:
+        if lowers_or_keeps_energy(layout_mid, layout_curr):
             layout_curr = layout_mid
             t_curr = t_mid
         else:

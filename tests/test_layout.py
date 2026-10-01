@@ -241,6 +241,21 @@ def test_jitter_is_due_when_the_square_root_of_the_steps_reaches_a_new_integer()
     assert [steps for steps in range(30) if jitter_due(steps)] == [1, 4, 9, 16, 25]
 
 
+def test_improved_takes_the_smallest_checked_step_when_every_step_keeps_an_infinite_energy():
+    # nodes 1 and 3 are on the same spot and their forces cancel, so they stay
+    # together and the energy stays infinite; inf <= inf must not let every step pass
+    layout = GraphLayout([[1], [0, 2], [1, 3], [2]], [[0, 0], [2, 0], [4, 0], [2, 0]])
+    assert layout.energy == math.inf
+    assert improved(layout).locations.tolist() == layout.step(1 / 16).locations.tolist()
+
+
+def test_improved_takes_a_step_from_an_infinite_to_a_finite_energy():
+    # nodes 1 and 3 are on the same spot, node 3 is pulled away from node 1 by node 2
+    layout = GraphLayout([[1], [0, 2], [1, 3], [2]], [[0, 0], [3, 0], [6, 0], [3, 0]])
+    assert layout.energy == math.inf
+    assert math.isfinite(improved(layout).energy)
+
+
 def test_improved_takes_the_smallest_checked_step_when_no_step_lowers_the_energy():
     # nodes 0 and 2 are almost on top of each other, every checked step overshoots
     layout = GraphLayout([[1], [0, 2], [1]], [[2.39, 3.87], [0.94, 3.5], [2.38, 3.87]])
