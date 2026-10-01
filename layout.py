@@ -1,5 +1,6 @@
 # an incremental graph layout algorithm - prototype
 
+import dataclasses
 import math
 
 import numpy as np
@@ -28,6 +29,68 @@ def assert_point_shape(array):
     assert array.shape == (2,)
 
 
+@dataclasses.dataclass(frozen=True)
+class PowerLaw:
+    '''
+        repulsion between every pair of nodes, fading with a power of their distance
+    '''
+    # how hard two nodes push each other apart;
+    # 0 or more
+    strength: float
+    # how fast the push fades with distance: two nodes at distance d push each other
+    # apart with strength / d**exponent; a low exponent reaches far and spreads the
+    # whole graph, a high one acts mostly between close nodes;
+    # above 0
+    exponent: float
+
+    def __post_init__(self):
+        # written so that nan breaks the constraints
+        if not (math.isfinite(self.strength) and self.strength >= 0):
+            raise ValueError('strength: a number, 0 or more')
+        if not (math.isfinite(self.exponent) and self.exponent > 0):
+            raise ValueError('exponent: a number above 0')
+
+    def repulsion(self, loc_deltas, distances):
+        '''
+            the (2,) force on a node, from the (k, 2) loc_deltas and (k,) distances
+            to the other nodes
+        '''
+        assert_locations_shape(loc_deltas)
+        distances_column = np.expand_dims(distances, axis=COORDINATES)
+        # loc_deltas / distances is the unit vector towards the other node
+        repulsions = -self.strength * loc_deltas / distances_column ** (self.exponent + 1)
+        result = np.nansum(repulsions, axis=NODES)
+        assert_point_shape(result)
+        return result
+
+    def energy(self, distances):
+        '''
+            the node's share of the pair energies, from the (k,) distances to the other nodes:
+            -strength * (d**(1 - exponent) - 1) / (1 - exponent) for a pair,
+            -strength * ln(d) at exponent 1, which is the limit of the general form;
+            its negative derivative is the force strength / d**exponent
+        '''
+        # without strength there is no energy, also not for nodes on top of each other
+        if self.strength == 0:
+            return 0.0
+        exponent = self.exponent
+        # nodes on top of each other have infinite energy, for exponent >= 1
+        with np.errstate(divide='ignore'):
+            if exponent == 1:
+                pair_energies = -self.strength * np.log(distances)
+            else:
+                pair_energies = (
+                    -self.strength * (distances ** (1 - exponent) - 1) / (1 - exponent))
+        # every pair is seen from both of its nodes, hence the halving
+        return pair_energies.sum() / 2
+
+
+# 1/d reaches far: it inflates meshes from the inside, giving wireframe bodies a 3D look
+BALLOON = PowerLaw(strength=2, exponent=1)
+# 1/d**2 acts close: it spreads trees into clean branches, but converges slowly
+DENSE = PowerLaw(strength=1, exponent=2)
+
+
 def circle_locations(nodecount):
     n = nodecount
     locations = [None] * n
@@ -44,7 +107,7 @@ def randomized(locations):
 
 
 class GraphLayout:
-    def __init__(self, edges, locations, pinned=None):
+    def __init__(self, edges, locations, pinned=None, model=BALLOON):
         assert len(edges) == len(locations)
         self.edges = [np.array(nodeindices, dtype=np.int64) for nodeindices in edges]
         self.locations = np.array(locations, dtype=np.float64)
@@ -54,6 +117,8 @@ class GraphLayout:
             pinned = np.zeros(len(edges), dtype=bool)
         self.pinned = np.array(pinned, dtype=bool)
         assert self.pinned.shape == (len(edges),)
+        # the repulsion between the nodes, e.g. a PowerLaw
+        self.model = model
         self.delta, self.energy = self.calculate_delta_and_energy()
         self.tension = self.calculate_tension()
 
@@ -69,7 +134,7 @@ class GraphLayout:
             energy: the potential of these forces, delta is its negative gradient,
                 so a small enough step along delta always lowers it:
                 sum over edges of (d - EDGE_LENGTH)**2 / (4 * EDGE_LENGTH)
-                minus sum over node pairs of 2 * ln(d)
+                plus the model's repulsion energy
         '''
         locations = self.locations
         assert_locations_shape(locations, length=len(self.edges))
@@ -88,13 +153,11 @@ class GraphLayout:
 
             # calculate repulsion - an effect of all other nodes
             # loc_deltas[node] is the node's delta to itself, [0, 0]: a non-zero
-            # distance turns its force into 0 instead of 0/0 and its energy into ln(1) = 0
+            # distance turns its force into 0 instead of 0/0 and its energy into
+            # that of distance 1, which is 0
             distances[node] = 1
-            repulsion = self.repulsion(loc_deltas, distances)
-            # every pair is seen from both of its nodes, hence 1 instead of 2;
-            # nodes on top of each other have infinite energy
-            with np.errstate(divide='ignore'):
-                energy -= np.log(distances).sum()
+            repulsion = self.model.repulsion(loc_deltas, distances)
+            energy += self.model.energy(distances)
 
             # set the new location
             delta[node] = attraction + repulsion
@@ -116,20 +179,24 @@ class GraphLayout:
         assert_point_shape(result)
         return result
 
-    def repulsion(self, loc_deltas, distances):
-        assert_locations_shape(loc_deltas)
-        distances_column = np.expand_dims(distances, axis=COORDINATES)
-        repulsions = -2 * loc_deltas / distances_column ** 2
-        result = np.nansum(repulsions, axis=NODES)
-        assert_point_shape(result)
-        return result
+    def moved(self, locations, pinned=None):
+        '''
+            create a layout of the same graph and model at locations,
+            keeping the pins unless pinned is given
+        '''
+        if pinned is None:
+            pinned = self.pinned
+        return GraphLayout(self.edges, locations, pinned, self.model)
+
+    def with_model(self, model):
+        return GraphLayout(self.edges, self.locations, self.pinned, model)
 
     def step(self, t):
         '''
             create a new layout by applying delta to the current layout t times
         '''
         new_locations = self.locations + self.delta * t
-        return GraphLayout(self.edges, new_locations, self.pinned)
+        return self.moved(new_locations)
 
     def pinned_at(self, node, location):
         '''
@@ -139,22 +206,22 @@ class GraphLayout:
         locations[node] = location
         pinned = self.pinned.copy()
         pinned[node] = True
-        return GraphLayout(self.edges, locations, pinned)
+        return self.moved(locations, pinned)
 
     def unpinned(self, node):
         pinned = self.pinned.copy()
         pinned[node] = False
-        return GraphLayout(self.edges, self.locations, pinned)
+        return self.moved(self.locations, pinned)
 
     def unpinned_all(self):
-        return GraphLayout(self.edges, self.locations)
+        return self.moved(self.locations, np.zeros(len(self.edges), dtype=bool))
 
 
 def randomized_layout(layout):
     # pinned nodes stay in place
     pinned_column = np.expand_dims(layout.pinned, axis=COORDINATES)
     locations = np.where(pinned_column, layout.locations, randomized(layout.locations))
-    return GraphLayout(layout.edges, locations, layout.pinned)
+    return layout.moved(locations)
 
 
 def toggle_pin(layout, node):
@@ -183,7 +250,7 @@ def jittered(layout):
     '''
     jitter = np.random.randint(-1, 2, layout.locations.shape) * JITTER
     jitter[layout.pinned] = 0
-    return GraphLayout(layout.edges, layout.locations + jitter, layout.pinned)
+    return layout.moved(layout.locations + jitter)
 
 
 def improved(layout):

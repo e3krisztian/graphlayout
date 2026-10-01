@@ -1,5 +1,6 @@
 # GUI app: shows a graph while its layout is being improved
 
+import dataclasses
 import math
 import statistics
 import tkinter
@@ -14,7 +15,7 @@ from graphs import (
     eiffel_tower_front,
     tetrahedron, cube, octahedron, dodecahedron, icosahedron)
 from layout import (
-    X, Y, NODES, COORDINATES,
+    X, Y, NODES, COORDINATES, BALLOON, DENSE,
     GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin,
     improved, jitter_due, jittered,
 )
@@ -267,6 +268,36 @@ class PipeDialog:
         self.window.destroy()
 
 
+# the preset menu shows this for a model that matches no preset
+CUSTOM = "Custom"
+
+# (preset menu entry, model)
+PRESETS = [
+    ("Balloon (1/d)", BALLOON),
+    ("Dense (1/d²)", DENSE),
+]
+
+
+def preset_name(model):
+    for name, preset in PRESETS:
+        if model == preset:
+            return name
+    return CUSTOM
+
+
+def model_with_knob(model, field, text):
+    # (model with field set from text, None), or (None, the broken constraint)
+    try:
+        value = float(text)
+    except ValueError:
+        # the model rejects nan with its own message
+        value = math.nan
+    try:
+        return dataclasses.replace(model, **{field: value}), None
+    except ValueError as error:
+        return None, str(error)
+
+
 PIPES = "Pipes"
 
 # rows of buttons in each group of graphs, the groups get as many columns as they need
@@ -343,6 +374,8 @@ class App:
         # the last choice of drawing the labels, for graphs that start with labels
         self.label_order = LABELS_ABOVE
         self.pipe_parameters = (10, 10, False)
+        # the repulsion of new layouts, and of the current one
+        self.model = BALLOON
         # written to end the wait for events while the animation is stopped
         self.wakeup = tkinter.IntVar()
         self.animating = True
@@ -388,6 +421,7 @@ class App:
         tkinter.Button(self.toolbar, text="Step", command=self.step).pack(side=tkinter.LEFT)
         tkinter.Button(self.toolbar, text="Unpin all", command=self.unpin_all).pack(
             side=tkinter.LEFT)
+        self.create_repulsion_group()
         for name, graphs in reversed(GRAPH_GROUPS):
             buttons = [
                 (text, lambda create_graph=create_graph: self.new_graph(create_graph()))
@@ -401,6 +435,62 @@ class App:
                 tkinter.Button(group, text=text, command=command).grid(
                     row=i // columns, column=i % columns, sticky=tkinter.EW)
 
+    def create_repulsion_group(self):
+        group = tkinter.LabelFrame(self.toolbar, text="Repulsion")
+        group.pack(side=tkinter.LEFT, anchor=tkinter.N, padx=2)
+        self.preset = tkinter.StringVar(value=preset_name(self.model))
+        tkinter.Label(group, text="Preset").grid(row=0, column=0, sticky=tkinter.E, padx=5)
+        tkinter.OptionMenu(
+            group, self.preset, *[name for name, model in PRESETS], CUSTOM,
+            command=self.preset_selected).grid(row=0, column=1, sticky=tkinter.EW)
+        # field name: (text variable, spinbox, the spinbox's own text colour)
+        self.knobs = {}
+        # field name: the broken constraint of the knob, or None
+        self.knob_messages = {}
+        for row, (field, text, minimum) in enumerate(
+                [('strength', "Strength", 0), ('exponent', "Exponent", 0.1)], start=1):
+            variable = tkinter.StringVar(value=getattr(self.model, field))
+            tkinter.Label(group, text=text).grid(row=row, column=0, sticky=tkinter.E, padx=5)
+            # neither knob has a natural upper bound, the arrows stop at 1000
+            spinbox = tkinter.Spinbox(
+                group, from_=minimum, to=1000, increment=0.1, textvariable=variable, width=6)
+            spinbox.grid(row=row, column=1, sticky=tkinter.W, pady=2)
+            self.knobs[field] = (variable, spinbox, spinbox.cget('foreground'))
+            self.knob_messages[field] = None
+            variable.trace_add('write', lambda *args, field=field: self.knob_changed(field))
+        self.knob_message = tkinter.StringVar()
+        tkinter.Label(group, textvariable=self.knob_message, foreground='red').grid(
+            row=3, column=0, columnspan=2)
+
+    def knob_changed(self, field):
+        # bad text is shown in red, the model keeps the last valid value
+        variable, spinbox, foreground = self.knobs[field]
+        model, message = model_with_knob(self.model, field, variable.get())
+        spinbox.configure(foreground=foreground if model is not None else 'red')
+        self.knob_messages[field] = message
+        self.knob_message.set('; '.join(
+            message for message in self.knob_messages.values() if message is not None))
+        if model is not None and model != self.model:
+            self.set_model(model)
+
+    def preset_selected(self, name):
+        # Custom is never applied, the menu only shows it for a model matching no preset
+        presets = dict(PRESETS)
+        if name in presets:
+            self.set_model(presets[name])
+            # the spinboxes follow, their traces find the model unchanged
+            for field, (variable, spinbox, foreground) in self.knobs.items():
+                variable.set(getattr(self.model, field))
+        self.preset.set(preset_name(self.model))
+
+    def set_model(self, model):
+        # the positions, the iteration count and the jitter carry on,
+        # the energy jumps as its function changed
+        self.model = model
+        self.layout = self.layout.with_model(model)
+        self.preset.set(preset_name(model))
+        self.wake()
+
     def set_layout(self, layout):
         # a new layout restarts the iteration count and the jitter
         self.layout = layout
@@ -410,7 +500,7 @@ class App:
 
     def new_graph(self, graph):
         locations = randomized(circle_locations(graph.nodecount))
-        self.set_layout(GraphLayout(graph.edges, locations))
+        self.set_layout(GraphLayout(graph.edges, locations, model=self.model))
         self.edgecount = sum(len(neighbours) for neighbours in graph.edges) // 2
         if graph.nodecount > self.LABELS_MAX_NODES:
             self.labels.set(LABELS_OFF)

@@ -1,7 +1,10 @@
 import pytest
 
-from app import GraphCanvas, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, centered_position
-from layout import EDGE_LENGTH, GraphLayout
+from app import (
+    GraphCanvas, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, centered_position,
+    model_with_knob, preset_name,
+)
+from layout import EDGE_LENGTH, BALLOON, DENSE, GraphLayout, PowerLaw
 from themes import DARK, LIGHT
 
 
@@ -167,3 +170,33 @@ def test_pinned_label_boxes_have_the_pinned_outline(labels):
     canvas = draw(triangle().pinned_at(1, [2, 0]), LIGHT, labels)
     outlines = [options['outline'] for kind, options in canvas.items if kind == 'rectangle']
     assert outlines == [LIGHT['node_outline'], LIGHT['pinned'], LIGHT['node_outline']]
+
+
+def test_model_with_knob_sets_the_field_from_text_and_keeps_the_other():
+    assert model_with_knob(BALLOON, 'strength', ' 1.5 ') == (
+        PowerLaw(strength=1.5, exponent=BALLOON.exponent), None)
+    assert model_with_knob(BALLOON, 'exponent', '2.5') == (
+        PowerLaw(strength=BALLOON.strength, exponent=2.5), None)
+
+
+@pytest.mark.parametrize('field, text, message', [
+    ('strength', '', 'strength: a number, 0 or more'),
+    ('strength', 'abc', 'strength: a number, 0 or more'),
+    ('strength', '-1', 'strength: a number, 0 or more'),
+    ('strength', 'nan', 'strength: a number, 0 or more'),
+    ('exponent', '', 'exponent: a number above 0'),
+    ('exponent', 'abc', 'exponent: a number above 0'),
+    ('exponent', '0', 'exponent: a number above 0'),
+    ('exponent', 'nan', 'exponent: a number above 0'),
+])
+def test_model_with_knob_rejects_text_breaking_the_constraint(field, text, message):
+    assert model_with_knob(BALLOON, field, text) == (None, message)
+
+
+def test_preset_name_names_the_presets():
+    assert preset_name(BALLOON) == "Balloon (1/d)"
+    assert preset_name(DENSE) == "Dense (1/d²)"
+
+
+def test_preset_name_is_custom_for_other_models():
+    assert preset_name(PowerLaw(strength=2, exponent=1.5)) == "Custom"

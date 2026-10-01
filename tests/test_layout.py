@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from layout import (
-    EDGE_LENGTH, JITTER,
-    GraphLayout, improved, jitter_due, jittered, randomized_layout, toggle_pin,
+    EDGE_LENGTH, JITTER, BALLOON, DENSE,
+    GraphLayout, PowerLaw, improved, jitter_due, jittered, randomized_layout, toggle_pin,
 )
 
 
@@ -112,16 +112,93 @@ def test_energy_of_unconnected_nodes_is_the_repulsion_energy():
     assert layout.energy == pytest.approx(-2 * math.log(5))
 
 
-def test_delta_is_the_negative_gradient_of_the_energy():
-    layout = path_layout()
+@pytest.mark.parametrize('exponent', [0.5, 1, 1.5, 2, 3])
+def test_delta_is_the_negative_gradient_of_the_energy(exponent):
+    layout = path_layout().with_model(PowerLaw(strength=2, exponent=exponent))
     h = 1e-6
     for node in range(3):
         for axis in range(2):
             locations = layout.locations.copy()
             locations[node, axis] += h
-            moved = GraphLayout(layout.edges, locations)
+            moved = layout.moved(locations)
             gradient = (moved.energy - layout.energy) / h
             assert -gradient == pytest.approx(layout.delta[node, axis], abs=1e-4)
+
+
+def test_power_law_accepts_its_boundary_values():
+    PowerLaw(strength=0, exponent=1)
+    PowerLaw(strength=1, exponent=1e-6)
+
+
+@pytest.mark.parametrize('strength, exponent, knob', [
+    (-1, 1, 'strength'),
+    (math.nan, 1, 'strength'),
+    (math.inf, 1, 'strength'),
+    (1, 0, 'exponent'),
+    (1, -1, 'exponent'),
+    (1, math.nan, 'exponent'),
+    (1, math.inf, 'exponent'),
+])
+def test_power_law_rejects_broken_constraints_naming_the_knob(strength, exponent, knob):
+    with pytest.raises(ValueError, match='^' + knob + ': '):
+        PowerLaw(strength=strength, exponent=exponent)
+
+
+def test_layouts_are_balloon_by_default():
+    assert two_node_layout(EDGE_LENGTH).model == BALLOON
+
+
+def test_balloon_pushes_with_2_over_d_and_has_the_energy_minus_2_ln_d():
+    layout = GraphLayout([[], []], [[0, 0], [3, 4]], model=BALLOON)
+    # 2/5, along the unit vector [3, 4] / 5
+    assert layout.delta[1].tolist() == pytest.approx([2/5 * 3/5, 2/5 * 4/5])
+    assert layout.energy == pytest.approx(-2 * math.log(5))
+
+
+def test_dense_pushes_with_1_over_d_squared_and_has_the_energy_1_over_d_minus_1():
+    layout = GraphLayout([[], []], [[0, 0], [3, 4]], model=DENSE)
+    assert layout.delta[1].tolist() == pytest.approx([1/25 * 3/5, 1/25 * 4/5])
+    assert layout.energy == pytest.approx(1/5 - 1)
+
+
+def test_energy_is_continuous_across_exponent_1():
+    def energy(exponent):
+        return GraphLayout(
+            [[], []], [[0, 0], [3, 4]], model=PowerLaw(strength=2, exponent=exponent)).energy
+    assert energy(1 - 1e-6) == pytest.approx(energy(1), abs=1e-4)
+    assert energy(1 + 1e-6) == pytest.approx(energy(1), abs=1e-4)
+
+
+@pytest.mark.parametrize('derive', [
+    lambda layout: layout.step(0.5),
+    lambda layout: layout.pinned_at(1, [3, 4]),
+    lambda layout: layout.unpinned(0),
+    lambda layout: layout.unpinned_all(),
+    lambda layout: layout.moved(layout.locations + 1),
+    lambda layout: randomized_layout(layout),
+    lambda layout: toggle_pin(layout, 2),
+    lambda layout: toggle_pin(layout, 0),
+    lambda layout: jittered(layout),
+    lambda layout: improved(layout),
+])
+def test_derived_layouts_keep_the_model(derive):
+    layout = path_layout([True, False, False]).with_model(DENSE)
+    assert derive(layout).model == DENSE
+
+
+def test_moved_keeps_the_pins_unless_given():
+    layout = path_layout([True, False, False])
+    assert layout.moved(layout.locations).pinned.tolist() == [True, False, False]
+    assert layout.moved(layout.locations, [False, False, True]).pinned.tolist() == [
+        False, False, True]
+
+
+def test_with_model_keeps_the_locations_and_pins():
+    layout = path_layout([True, False, False])
+    changed = layout.with_model(DENSE)
+    assert changed.model == DENSE
+    assert changed.locations.tolist() == layout.locations.tolist()
+    assert changed.pinned.tolist() == [True, False, False]
 
 
 @pytest.mark.parametrize('seed', range(5))
