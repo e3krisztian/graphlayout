@@ -263,17 +263,41 @@ def lowers_or_keeps_energy(layout_new, layout_old):
     return math.isfinite(layout_new.energy) and layout_new.energy <= layout_old.energy
 
 
+# when even the first step of improved raises the energy, it is halved at most this many times
+MAX_HALVINGS = 30
+
+
+def step_move_limit(layout):
+    '''
+        the farthest a step of improved moves a node: the median edge length, so the limit
+        shrinks with the layout, but at least EDGE_LENGTH
+    '''
+    sources = np.repeat(np.arange(len(layout.edges)), [len(e) for e in layout.edges])
+    if len(sources) == 0:
+        return EDGE_LENGTH
+    targets = np.concatenate(layout.edges)
+    # every edge is listed at both of its ends
+    once = sources < targets
+    lengths = np.linalg.norm(
+        layout.locations[targets[once]] - layout.locations[sources[once]], axis=COORDINATES)
+    return max(float(np.median(lengths)), EDGE_LENGTH)
+
+
 def improved(layout):
     '''
         create a new layout one step along delta, searching for a step size that lowers the energy:
-        doubling it, then bisecting; in the rare case that no checked step lowers the energy,
-        the smallest one is taken
+        doubling it, then bisecting; no step moves a node farther than step_move_limit;
+        when even the first step raises the energy, it is halved until a step does not,
+        and in the rare case that none does, the smallest one is taken
     '''
+    largest_force = np.linalg.norm(layout.delta, axis=COORDINATES).max(initial=0)
+    t_limit = step_move_limit(layout) / largest_force if largest_force > 0 else math.inf
+
     # double t while the step does not raise the energy
     n = 4
     t_curr = 0
     layout_curr = layout
-    t_next = 1.0
+    t_next = min(1.0, t_limit)
     while n > 0:
         layout_next = layout.step(t_next)
 
@@ -281,9 +305,23 @@ def improved(layout):
             break
 
         t_curr = t_next
-        t_next = t_next + t_next
         layout_curr = layout_next
+        if t_curr == t_limit:
+            # the farthest step allowed does not raise the energy
+            return layout_curr
+        t_next = min(t_next + t_next, t_limit)
         n -= 1
+
+    if layout_curr is layout:
+        # even the first step raises the energy: a small enough step along delta lowers it
+        for _ in range(MAX_HALVINGS):
+            t_next /= 2
+            layout_next = layout.step(t_next)
+            if lowers_or_keeps_energy(layout_next, layout):
+                return layout_next
+        # no checked step lowers the energy: take the smallest one, raising the energy,
+        # rather than getting stuck with the unchanged layout
+        return layout_next
 
     # bisect-find the best layout between
     n = 4
@@ -295,11 +333,6 @@ def improved(layout):
             t_curr = t_mid
         else:
             t_next = t_mid
-            layout_rejected = layout_mid
         n -= 1
 
-    # no step was accepted: take the smallest checked one, raising the energy,
-    # rather than getting stuck with the unchanged layout
-    if layout_curr is layout:
-        return layout_rejected
     return layout_curr

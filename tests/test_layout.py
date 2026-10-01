@@ -5,7 +5,8 @@ import pytest
 
 from layout import (
     EDGE_LENGTH, JITTER, BALLOON, DENSE,
-    GraphLayout, PowerLaw, improved, jitter_due, jittered, randomized_layout, toggle_pin,
+    GraphLayout, PowerLaw, improved, jitter_due, jittered, randomized_layout, step_move_limit,
+    toggle_pin,
 )
 
 
@@ -246,7 +247,8 @@ def test_improved_takes_the_smallest_checked_step_when_every_step_keeps_an_infin
     # together and the energy stays infinite; inf <= inf must not let every step pass
     layout = GraphLayout([[1], [0, 2], [1, 3], [2]], [[0, 0], [2, 0], [4, 0], [2, 0]])
     assert layout.energy == math.inf
-    assert improved(layout).locations.tolist() == layout.step(1 / 16).locations.tolist()
+    largest_move = np.abs(improved(layout).locations - layout.locations).max()
+    assert 0 < largest_move < 1e-6
 
 
 def test_improved_takes_a_step_from_an_infinite_to_a_finite_energy():
@@ -256,9 +258,36 @@ def test_improved_takes_a_step_from_an_infinite_to_a_finite_energy():
     assert math.isfinite(improved(layout).energy)
 
 
-def test_improved_takes_the_smallest_checked_step_when_no_step_lowers_the_energy():
-    # nodes 0 and 2 are almost on top of each other, every checked step overshoots
-    layout = GraphLayout([[1], [0, 2], [1]], [[2.39, 3.87], [0.94, 3.5], [2.38, 3.87]])
-    smallest_step = layout.step(1 / 16)
-    assert smallest_step.energy > layout.energy
-    assert improved(layout).locations.tolist() == smallest_step.locations.tolist()
+def nearly_overlapping_layout(model):
+    # nodes 0 and 2 are almost on top of each other, their repulsion is huge
+    return GraphLayout(
+        [[1], [0, 2], [1]], [[2.39, 3.87], [0.94, 3.5], [2.38, 3.87]], model=model)
+
+
+@pytest.mark.parametrize('model', [BALLOON, DENSE])
+def test_improved_lowers_the_energy_of_nearly_overlapping_nodes(model):
+    layout = nearly_overlapping_layout(model)
+    # the earlier search stopped at 1/16 of delta, which overshoots
+    assert layout.step(1 / 16).energy > layout.energy
+    assert improved(layout).energy < layout.energy
+
+
+@pytest.mark.parametrize('model', [BALLOON, DENSE])
+def test_improved_moves_no_node_farther_than_the_step_move_limit(model):
+    layout = nearly_overlapping_layout(model)
+    moves = np.linalg.norm(improved(layout).locations - layout.locations, axis=1)
+    assert moves.max() <= step_move_limit(layout) * (1 + 1e-9)
+
+
+def test_step_move_limit_is_the_median_edge_length():
+    # path 0-1-2-3 with edges of length 3, 4 and 10
+    layout = GraphLayout([[1], [0, 2], [1, 3], [2]], [[0, 0], [3, 0], [7, 0], [17, 0]])
+    assert step_move_limit(layout) == 4
+
+
+def test_step_move_limit_is_at_least_edge_length():
+    assert step_move_limit(two_node_layout(EDGE_LENGTH / 4)) == EDGE_LENGTH
+
+
+def test_step_move_limit_of_a_graph_without_edges_is_edge_length():
+    assert step_move_limit(GraphLayout([[], []], [[0, 0], [100, 0]])) == EDGE_LENGTH
