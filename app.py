@@ -274,14 +274,6 @@ GRAPH_ROWS = 3
 
 # (group name, [(button text, graph creator)])
 GRAPH_GROUPS = [
-    ("Small", [
-        ("g1", g1),
-        ("g2", g2),
-        ("Random", lambda: randomg(20, 50)),
-        ("Star", lambda: star(50)),
-        ("Star2", lambda: star2(50)),
-        ("Complete", lambda: completegraph(40)),
-    ]),
     ("Named", [
         ("Petersen", petersen),
         ("Heawood", heawood),
@@ -312,6 +304,14 @@ GRAPH_GROUPS = [
         ("Pipe2000", lambda: pipe(20, 100)),
         ("Torus", lambda: pipe(10, 10, closed=True)),
         ("Torus400", lambda: pipe(20, 20, closed=True)),
+    ]),
+    ("Small", [
+        ("g1", g1),
+        ("g2", g2),
+        ("Random", lambda: randomg(20, 50)),
+        ("Star", lambda: star(50)),
+        ("Star2", lambda: star2(50)),
+        ("Complete", lambda: completegraph(40)),
     ]),
 ]
 
