@@ -3,8 +3,8 @@ import dataclasses
 import pytest
 
 from app import (
-    GraphCanvas, KNOBS, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, STARTS, centered_position,
-    model_with_knob, preset_name, start_locations,
+    GRAPH_GROUPS, GRAPH_ROWS, PIPES, GraphCanvas, KNOBS, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF,
+    STARTS, centered_position, model_with_knob, preset_name, start_locations, wrapped,
 )
 from bubble_tree import bubble_tree_locations
 from layout import EDGE_LENGTH, INFLATE, DENSE, STRESS, Inflate, GraphLayout, PowerLaw
@@ -228,3 +228,23 @@ def test_start_locations_give_a_location_to_every_node(name):
 def test_bubble_tree_start_is_the_bubble_tree():
     edges = [[1], [0, 2], [1], []]
     assert start_locations("Bubble tree", edges).tolist() == bubble_tree_locations(edges).tolist()
+
+
+def test_wrapped_places_the_buttons_row_by_row():
+    assert wrapped(list('abcdefgh')) == [list('adg'), list('beh'), list('cf')]
+    assert wrapped(list('ab')) == [['a', 'b']]
+
+
+@pytest.mark.parametrize('name, columns', GRAPH_GROUPS)
+def test_graph_groups_have_at_most_graph_rows_rows(name, columns):
+    assert all(len(column) <= GRAPH_ROWS for column in columns)
+
+
+def test_the_last_pipes_column_has_room_for_the_custom_button():
+    assert len(dict(GRAPH_GROUPS)[PIPES][-1]) < GRAPH_ROWS
+
+
+def test_pipes_rings_and_toruses_have_a_column_each():
+    columns = dict(GRAPH_GROUPS)[PIPES]
+    assert [[text for text, create_graph in column] for column in columns] == [
+        ["Pipe", "Pipe400", "Pipe2000"], ["Ring", "Ring400"], ["Torus", "Torus400"]]

@@ -333,9 +333,16 @@ PIPES = "Pipes"
 # rows of buttons in each group of graphs, the groups get as many columns as they need
 GRAPH_ROWS = 3
 
-# (group name, [(button text, graph creator)])
+
+def wrapped(buttons):
+    # the columns of buttons placed row by row, GRAPH_ROWS rows at most
+    columns = math.ceil(len(buttons) / GRAPH_ROWS)
+    return [buttons[column::columns] for column in range(columns)]
+
+
+# (group name, [column of [(button text, graph creator)]])
 GRAPH_GROUPS = [
-    ("Named", [
+    ("Named", wrapped([
         ("Petersen", petersen),
         ("Heawood", heawood),
         ("Moser", moser_spindle),
@@ -344,36 +351,43 @@ GRAPH_GROUPS = [
         ("Cubes345", lambda: cube_stack(3, 4, 5)),
         ("Eiffel", eiffel_tower),
         ("Eiffel2", eiffel_tower_front),
-    ]),
-    ("Platonic", [
+    ])),
+    ("Platonic", wrapped([
         ("Tetra", tetrahedron),
         ("Cube", cube),
         ("Octa", octahedron),
         ("Dodeca", dodecahedron),
         ("Icosa", icosahedron),
-    ]),
-    ("Trees", [
+    ])),
+    ("Trees", wrapped([
         ("T 40", lambda: tree(40)),
         ("T 100", lambda: tree(100)),
         ("T 200", lambda: tree(200)),
-    ]),
+    ])),
+    # the Custom... button goes below the toruses
     (PIPES, [
-        ("Ring", lambda: pipe(20, 5)),
-        ("Ring400", lambda: pipe(40, 10)),
-        ("Pipe", lambda: pipe(10, 10)),
-        ("Pipe400", lambda: pipe(20, 20)),
-        ("Pipe2000", lambda: pipe(20, 100)),
-        ("Torus", lambda: pipe(10, 10, closed=True)),
-        ("Torus400", lambda: pipe(20, 20, closed=True)),
+        [
+            ("Pipe", lambda: pipe(10, 10)),
+            ("Pipe400", lambda: pipe(20, 20)),
+            ("Pipe2000", lambda: pipe(20, 100)),
+        ],
+        [
+            ("Ring", lambda: pipe(20, 5)),
+            ("Ring400", lambda: pipe(40, 10)),
+        ],
+        [
+            ("Torus", lambda: pipe(10, 10, closed=True)),
+            ("Torus400", lambda: pipe(20, 20, closed=True)),
+        ],
     ]),
-    ("Small", [
+    ("Small", wrapped([
         ("g1", g1),
         ("g2", g2),
         ("Random", lambda: randomg(20, 50)),
         ("Star", lambda: star(50)),
         ("Star2", lambda: star2(50)),
         ("Complete", lambda: completegraph(40)),
-    ]),
+    ])),
 ]
 
 
@@ -455,18 +469,19 @@ class App:
             side=tkinter.LEFT)
         self.create_start_group()
         self.create_forces_group()
-        for name, graphs in reversed(GRAPH_GROUPS):
-            buttons = [
-                (text, lambda create_graph=create_graph: self.new_graph(create_graph()))
-                for text, create_graph in graphs]
+        for name, graph_columns in reversed(GRAPH_GROUPS):
+            columns = [
+                [(text, lambda create_graph=create_graph: self.new_graph(create_graph()))
+                 for text, create_graph in graphs]
+                for graphs in graph_columns]
             if name == PIPES:
-                buttons.append(("Custom...", self.open_pipe_dialog))
-            columns = math.ceil(len(buttons) / GRAPH_ROWS)
+                columns[-1].append(("Custom...", self.open_pipe_dialog))
             group = tkinter.LabelFrame(self.toolbar, text=name)
             group.pack(side=tkinter.RIGHT, anchor=tkinter.N, padx=2)
-            for i, (text, command) in enumerate(buttons):
-                tkinter.Button(group, text=text, command=command).grid(
-                    row=i // columns, column=i % columns, sticky=tkinter.EW)
+            for column, buttons in enumerate(columns):
+                for row, (text, command) in enumerate(buttons):
+                    tkinter.Button(group, text=text, command=command).grid(
+                        row=row, column=column, sticky=tkinter.EW)
 
     def create_start_group(self):
         group = tkinter.LabelFrame(self.toolbar, text="Start")
