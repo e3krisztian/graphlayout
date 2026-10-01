@@ -278,6 +278,8 @@ GRAPH_GROUPS = [
         ("Star", lambda: star(50)),
         ("Star2", lambda: star2(50)),
         ("Complete", lambda: completegraph(40)),
+    ]),
+    ("Named", 4, [
         ("Petersen", petersen),
         ("Heawood", heawood),
         ("Moser", moser_spindle),
