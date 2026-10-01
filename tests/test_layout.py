@@ -168,6 +168,21 @@ def test_energy_is_continuous_across_exponent_1():
             [[], []], [[0, 0], [3, 4]], model=PowerLaw(strength=2, exponent=exponent)).energy
     assert energy(1 - 1e-6) == pytest.approx(energy(1), abs=1e-4)
     assert energy(1 + 1e-6) == pytest.approx(energy(1), abs=1e-4)
+    # so close to 1, d**(1 - exponent) - 1 would keep only a few correct digits
+    assert energy(1 - 1e-12) == pytest.approx(energy(1), abs=1e-9)
+    assert energy(1 + 1e-12) == pytest.approx(energy(1), abs=1e-9)
+
+
+@pytest.mark.parametrize('exponent, energy', [
+    # the pair energy at d = 0 is strength / (1 - exponent) below exponent 1
+    (0.5, 2 / 0.5),
+    (1, math.inf),
+    (2, math.inf),
+])
+def test_energy_of_nodes_on_the_same_spot(exponent, energy):
+    layout = GraphLayout(
+        [[], []], [[1, 1], [1, 1]], model=PowerLaw(strength=2, exponent=exponent))
+    assert layout.energy == pytest.approx(energy)
 
 
 @pytest.mark.parametrize('derive', [

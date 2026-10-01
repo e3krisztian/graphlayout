@@ -81,8 +81,11 @@ class PowerLaw:
             if exponent == 1:
                 pair_energies = -self.strength * np.log(distances)
             else:
+                # d**(1 - exponent) - 1 as expm1((1 - exponent) * ln(d)): near exponent 1
+                # the subtraction would cancel most of the digits of d**(1 - exponent)
                 pair_energies = (
-                    -self.strength * (distances ** (1 - exponent) - 1) / (1 - exponent))
+                    -self.strength * np.expm1((1 - exponent) * np.log(distances))
+                    / (1 - exponent))
         # every pair is seen from both of its nodes, hence the halving
         return pair_energies.sum() / 2
 
