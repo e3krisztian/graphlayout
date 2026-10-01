@@ -43,7 +43,10 @@ def permutation(n):
 def randomg(n, e):
     g = Graph(n)
     for i in range(e):
-        g.add_edge(int(n * random.random()), int(n * random.random()))
+        # the other end is one of the other n - 1 nodes: no self-loops
+        node1 = int(n * random.random())
+        node2 = (node1 + 1 + int((n - 1) * random.random())) % n
+        g.add_edge(node1, node2)
     return g
 
 def g1():

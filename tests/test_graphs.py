@@ -1,10 +1,11 @@
 import itertools
+import random
 
 import pytest
 
 from graphs import (
     cube, cube_stack, dodecahedron, eiffel_tower, eiffel_tower_front, hanoi, heawood,
-    icosahedron, moser_spindle, octahedron, petersen, pipe, tetrahedron)
+    icosahedron, moser_spindle, octahedron, petersen, pipe, randomg, tetrahedron)
 
 
 def degrees(graph):
@@ -243,3 +244,12 @@ def test_eiffel_tower_front_has_every_node_on_a_triangle_but_the_spire():
     # the spire is a path above the top row of the lattice
     assert len(loose) == 2
     assert degrees(eiffel_tower_front()).count(1) == 1
+
+
+@pytest.mark.parametrize('seed', range(10))
+def test_random_graph_has_no_self_loops(seed):
+    # a self-loop is an edge of length 0, and its attraction is 0/0
+    random.seed(seed)
+    graph = randomg(20, 50)
+    assert all(node not in neighbours for node, neighbours in enumerate(graph.edges))
+    assert edge_count(graph) == 50
