@@ -229,8 +229,10 @@ def test_improved_does_not_raise_the_energy_when_a_checked_step_lowers_it(seed):
 
 
 def test_improved_takes_a_step_that_lowers_the_energy_but_raises_the_tension():
-    # every step improved tries along delta raises the tension of this layout
-    layout = GraphLayout([[1], [0, 2], [1]], [[2.0, 2.9], [0.2, 0.9], [4.9, 4.1]])
+    # every step improved tries along delta raises the tension of this layout,
+    # found for the forces of BALLOON
+    layout = GraphLayout(
+        [[1], [0, 2], [1]], [[2.0, 2.9], [0.2, 0.9], [4.9, 4.1]], model=BALLOON)
     assert layout.step(1 / 16).tension > layout.tension
     improved_layout = improved(layout)
     assert improved_layout.energy < layout.energy
