@@ -4,13 +4,13 @@ import numpy as np
 import pytest
 
 from layout import (
-    EDGE_LENGTH, JITTER, BALLOON, DENSE, STRESS, Balloon,
+    EDGE_LENGTH, JITTER, INFLATE, DENSE, STRESS, Inflate,
     GraphLayout, PowerLaw, Stress, attraction, hop_counts, improved, jitter_due, jittered, randomized_layout, step_move_limit,
     toggle_pin,
 )
 
 
-# the forces BALLOON had before its strength was scaled to the graph
+# the forces INFLATE had before its strength was scaled to the graph
 TWO_OVER_D = PowerLaw(strength=2, exponent=1)
 
 
@@ -148,8 +148,8 @@ def test_power_law_rejects_broken_constraints_naming_the_knob(strength, exponent
         PowerLaw(strength=strength, exponent=exponent)
 
 
-def test_layouts_are_balloon_by_default():
-    assert two_node_layout(EDGE_LENGTH).model == BALLOON
+def test_layouts_use_inflate_by_default():
+    assert two_node_layout(EDGE_LENGTH).model == INFLATE
 
 
 def test_two_over_d_pushes_with_2_over_d_and_has_the_energy_minus_2_ln_d():
@@ -159,24 +159,24 @@ def test_two_over_d_pushes_with_2_over_d_and_has_the_energy_minus_2_ln_d():
     assert layout.energy == pytest.approx(-2 * math.log(5))
 
 
-def test_balloon_is_the_1_over_d_power_law_with_spread_times_edges_over_pairs_strength():
+def test_inflate_is_the_1_over_d_power_law_with_spread_times_edges_over_pairs_strength():
     # 3 nodes, 2 edges, 3 pairs
-    layout = path_layout().with_model(Balloon(spread=3))
+    layout = path_layout().with_model(Inflate(spread=3))
     assert layout.field.law == PowerLaw(strength=3 * 2 / 3, exponent=1)
-    assert layout.model == Balloon(spread=3)
+    assert layout.model == Inflate(spread=3)
 
 
 @pytest.mark.parametrize('edges', [[[]], [[], []]])
-def test_balloon_does_not_push_without_edges(edges):
-    layout = GraphLayout(edges, [[i, 0] for i in range(len(edges))], model=BALLOON)
+def test_inflate_does_not_push_without_edges(edges):
+    layout = GraphLayout(edges, [[i, 0] for i in range(len(edges))], model=INFLATE)
     assert layout.field.law.strength == 0
 
 
-def test_balloon_settles_with_the_mean_of_d_times_d_minus_edge_length_at_2_edge_length_spread():
+def test_inflate_settles_with_the_mean_of_d_times_d_minus_edge_length_at_2_edge_length_spread():
     # a star of 8 leaves and a path of 3 behind one of them: 12 nodes, 11 edges
     edges = [[1, 2, 3, 4, 5, 6, 7, 8], *[[0] for _ in range(7)], [0, 9], [8, 10], [9, 11], [10]]
     np.random.seed(0)
-    layout = GraphLayout(edges, np.random.random((12, 2)) * 10, model=Balloon(spread=1.5))
+    layout = GraphLayout(edges, np.random.random((12, 2)) * 10, model=Inflate(spread=1.5))
     for _ in range(500):
         layout = improved(layout)
     assert layout.tension < 1e-3
@@ -186,14 +186,14 @@ def test_balloon_settles_with_the_mean_of_d_times_d_minus_edge_length_at_2_edge_
     assert np.mean(lengths * (lengths - EDGE_LENGTH)) == pytest.approx(2 * EDGE_LENGTH * 1.5, rel=1e-3)
 
 
-def test_balloon_accepts_spread_0():
-    Balloon(spread=0)
+def test_inflate_accepts_spread_0():
+    Inflate(spread=0)
 
 
 @pytest.mark.parametrize('spread', [-1, math.nan, math.inf])
-def test_balloon_rejects_broken_constraints_naming_the_knob(spread):
+def test_inflate_rejects_broken_constraints_naming_the_knob(spread):
     with pytest.raises(ValueError, match='^spread: '):
-        Balloon(spread=spread)
+        Inflate(spread=spread)
 
 
 def test_dense_pushes_with_1_over_d_squared_and_has_the_energy_1_over_d_minus_1():
@@ -329,7 +329,7 @@ def test_improved_lowers_the_energy_of_nearly_overlapping_nodes(model):
     assert improved(layout).energy < layout.energy
 
 
-@pytest.mark.parametrize('model', [TWO_OVER_D, BALLOON, DENSE])
+@pytest.mark.parametrize('model', [TWO_OVER_D, INFLATE, DENSE])
 def test_improved_moves_no_node_farther_than_the_step_move_limit(model):
     layout = nearly_overlapping_layout(model)
     moves = np.linalg.norm(improved(layout).locations - layout.locations, axis=1)

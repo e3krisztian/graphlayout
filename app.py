@@ -15,7 +15,7 @@ from graphs import (
     eiffel_tower_front,
     tetrahedron, cube, octahedron, dodecahedron, icosahedron)
 from layout import (
-    X, Y, NODES, COORDINATES, BALLOON, DENSE, STRESS, Balloon, PowerLaw, Stress,
+    X, Y, NODES, COORDINATES, INFLATE, DENSE, STRESS, Inflate, PowerLaw, Stress,
     GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin,
     improved, jitter_due, jittered,
 )
@@ -272,7 +272,7 @@ CUSTOM = "Custom"
 
 # (preset menu entry, model)
 PRESETS = [
-    ("Balloon (1/d)", BALLOON),
+    ("Inflate (1/d)", INFLATE),
     ("Dense (1/d²)", DENSE),
     ("Stress (hops)", STRESS),
 ]
@@ -282,7 +282,7 @@ PRESETS = [
 # where a large exponent does not yet overflow the powers of the distances;
 # typed values beyond the arrows' range are allowed, the model checks them
 KNOBS = {
-    Balloon: [
+    Inflate: [
         ('spread', "Spread", 0, 0.1, 10),
     ],
     PowerLaw: [
@@ -392,7 +392,7 @@ class App:
         self.label_order = LABELS_ABOVE
         self.pipe_parameters = (10, 10, False)
         # the model of the forces of new layouts, and of the current one
-        self.model = BALLOON
+        self.model = INFLATE
         # written to end the wait for events while the animation is stopped
         self.wakeup = tkinter.IntVar()
         self.animating = True

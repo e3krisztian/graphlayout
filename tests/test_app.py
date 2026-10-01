@@ -6,7 +6,7 @@ from app import (
     GraphCanvas, KNOBS, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, centered_position,
     model_with_knob, preset_name,
 )
-from layout import EDGE_LENGTH, BALLOON, DENSE, STRESS, Balloon, GraphLayout, PowerLaw
+from layout import EDGE_LENGTH, INFLATE, DENSE, STRESS, Inflate, GraphLayout, PowerLaw
 from themes import DARK, LIGHT
 
 
@@ -185,7 +185,7 @@ def test_model_with_knob_sets_the_field_from_text_and_keeps_the_other():
         PowerLaw(strength=1.5, exponent=DENSE.exponent), None)
     assert model_with_knob(DENSE, 'exponent', '2.5') == (
         PowerLaw(strength=DENSE.strength, exponent=2.5), None)
-    assert model_with_knob(BALLOON, 'spread', '3') == (Balloon(spread=3), None)
+    assert model_with_knob(INFLATE, 'spread', '3') == (Inflate(spread=3), None)
 
 
 @pytest.mark.parametrize('field, text, message', [
@@ -203,7 +203,7 @@ def test_model_with_knob_rejects_text_breaking_the_constraint(field, text, messa
 
 
 def test_preset_name_names_the_presets():
-    assert preset_name(BALLOON) == "Balloon (1/d)"
+    assert preset_name(INFLATE) == "Inflate (1/d)"
     assert preset_name(DENSE) == "Dense (1/d²)"
     assert preset_name(STRESS) == "Stress (hops)"
 

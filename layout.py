@@ -161,7 +161,7 @@ class PowerLawField:
 
 
 @dataclasses.dataclass(frozen=True)
-class Balloon:
+class Inflate:
     '''
         repulsion between every pair of nodes, fading with 1/d, its strength scaled to the graph
     '''
@@ -192,7 +192,7 @@ class Balloon:
 
 
 # 1/d reaches far: it inflates meshes from the inside, giving wireframe bodies a 3D look
-BALLOON = Balloon(spread=2)
+INFLATE = Inflate(spread=2)
 # 1/d**2 acts close: it spreads trees into clean branches, but converges slowly
 DENSE = PowerLaw(strength=1, exponent=2)
 
@@ -301,7 +301,7 @@ def randomized(locations):
 
 
 class GraphLayout:
-    def __init__(self, edges, locations, pinned=None, model=BALLOON, field=None):
+    def __init__(self, edges, locations, pinned=None, model=INFLATE, field=None):
         assert len(edges) == len(locations)
         self.edges = [np.array(nodeindices, dtype=np.int64) for nodeindices in edges]
         self.locations = np.array(locations, dtype=np.float64)
