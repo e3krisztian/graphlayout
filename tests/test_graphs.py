@@ -3,8 +3,8 @@ import itertools
 import pytest
 
 from graphs import (
-    cube, cube_stack, dodecahedron, eiffel_tower, hanoi, heawood, icosahedron, moser_spindle,
-    octahedron, petersen, pipe, tetrahedron)
+    cube, cube_stack, dodecahedron, eiffel_tower, eiffel_tower_front, hanoi, heawood,
+    icosahedron, moser_spindle, octahedron, petersen, pipe, tetrahedron)
 
 
 def degrees(graph):
@@ -223,3 +223,23 @@ def test_eiffel_tower():
 
 def test_eiffel_tower_ends_in_a_single_spire_tip():
     assert degrees(eiffel_tower()).count(1) == 1
+
+
+def test_eiffel_tower_front():
+    graph = eiffel_tower_front()
+    assert 200 <= graph.nodecount <= 1000
+    assert is_simple(graph)
+    assert is_connected(graph)
+
+
+def triangle_count(graph, node):
+    neighbours = set(graph.edges[node])
+    return sum(len(neighbours & set(graph.edges[neighbour])) for neighbour in neighbours) // 2
+
+
+def test_eiffel_tower_front_has_every_node_on_a_triangle_but_the_spire():
+    graph = eiffel_tower_front()
+    loose = [node for node in range(graph.nodecount) if triangle_count(graph, node) == 0]
+    # the spire is a path above the top row of the lattice
+    assert len(loose) == 2
+    assert degrees(eiffel_tower_front()).count(1) == 1

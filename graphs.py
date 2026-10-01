@@ -1,5 +1,6 @@
 # graphs to lay out: the Graph class and its creators
 
+import math
 import random
 
 
@@ -248,6 +249,89 @@ def eiffel_tower():
 
     g = Graph(nodecount)
     for node1, node2 in edges:
+        g.add_edge(node1, node2)
+    return g
+
+def eiffel_tower_front():
+    '''
+        the Eiffel tower seen from the front, cut out of a lattice of equilateral triangles
+
+        2 legs rising from the ground, an arch between them below the first platform,
+        the legs joining above the second platform, the third platform near the top, a spire
+
+        the proportions follow the real tower; heights and widths are in edge lengths
+    '''
+    height = 60
+    platforms = [0.19 * height, 0.38 * height, 0.92 * height]
+    platform_depth = 1.8
+    overhang = 0.6
+    # the legs join at this height
+    merge = 0.55 * height
+    top = 0.96 * height
+    arch_rib = 1.0
+    spire_nodes = 3
+    row_height = math.sqrt(3) / 2
+
+    def half_width(y):
+        return 0.21 * height * math.exp(-y / (0.33 * height)) + 0.5
+
+    def leg_width(y):
+        # a leg narrower than 2 would break into triangles linked only at their corners
+        return max(0.4 * half_width(y), 2.0)
+
+    # the arch is a circle through the inner sides of the legs on the ground and its apex
+    arch_x = half_width(0) - leg_width(0)
+    arch_apex = platforms[0] - platform_depth - 2.2
+    arch_radius = (arch_x ** 2 + arch_apex ** 2) / (2 * arch_apex)
+    arch_centre = arch_apex - arch_radius
+
+    def inside(x, y):
+        if any(platform - platform_depth <= y <= platform for platform in platforms):
+            return abs(x) <= half_width(y) + overhang
+        if abs(x) > half_width(y):
+            return False
+        # between the legs: the inner sides of the legs close in towards merge
+        between = (half_width(y) - leg_width(y)) * min(1, (merge - y) / 4)
+        if y < merge and abs(x) < between:
+            on_arch = abs(math.hypot(x, y - arch_centre) - arch_radius) < arch_rib
+            return y < platforms[0] and on_arch
+        return True
+
+    # a point is (row, x in half edge lengths); the odd rows are shifted by half an edge
+    rows = int(top / row_height) + 1
+    points = {
+        (row, column) for row in range(rows) for column in range(-80, 81)
+        if column % 2 == row % 2 and inside(column / 2, row * row_height)}
+
+    def neighbours(point):
+        row, column = point
+        candidates = [
+            (row, column - 2), (row, column + 2), (row - 1, column - 1), (row - 1, column + 1),
+            (row + 1, column - 1), (row + 1, column + 1)]
+        return [candidate for candidate in candidates if candidate in points]
+
+    # points not on a triangle would hang loose: drop them, until every point is on one
+    while True:
+        loose = {
+            point for point in points
+            if not any(set(neighbours(point)) & set(neighbours(other))
+                       for other in neighbours(point))}
+        if not loose:
+            break
+        points -= loose
+
+    nodes = {point: node for node, point in enumerate(sorted(points))}
+    g = Graph(len(nodes) + spire_nodes)
+    for point, node in nodes.items():
+        for neighbour in neighbours(point):
+            if nodes[neighbour] > node:
+                g.add_edge(node, nodes[neighbour])
+    spire = list(range(len(nodes), len(nodes) + spire_nodes))
+    top_row = max(row for row, _ in points)
+    for (row, _), node in nodes.items():
+        if row == top_row:
+            g.add_edge(node, spire[0])
+    for node1, node2 in zip(spire, spire[1:]):
         g.add_edge(node1, node2)
     return g
 

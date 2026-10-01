@@ -11,6 +11,7 @@ import numpy as np
 from graphs import (
     completegraph, tree, randomg, g1, g2, star, star2, pipe,
     petersen, heawood, moser_spindle, hanoi, cube_stack, eiffel_tower,
+    eiffel_tower_front,
     tetrahedron, cube, octahedron, dodecahedron, icosahedron)
 from layout import (
     X, Y, NODES, COORDINATES,
@@ -284,6 +285,7 @@ GRAPH_GROUPS = [
         ("Cubes234", lambda: cube_stack(2, 3, 4)),
         ("Cubes345", lambda: cube_stack(3, 4, 5)),
         ("Eiffel", eiffel_tower),
+        ("Eiffel2", eiffel_tower_front),
     ]),
     ("Platonic", 3, [
         ("Tetra", tetrahedron),
