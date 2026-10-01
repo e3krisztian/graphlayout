@@ -15,7 +15,7 @@ from graphs import (
     eiffel_tower_front,
     tetrahedron, cube, octahedron, dodecahedron, icosahedron)
 from layout import (
-    X, Y, NODES, COORDINATES, BALLOON, DENSE, STRESS, PowerLaw, Stress,
+    X, Y, NODES, COORDINATES, BALLOON, DENSE, STRESS, Balloon, PowerLaw, Stress,
     GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin,
     improved, jitter_due, jittered,
 )
@@ -283,6 +283,9 @@ PRESETS = [
 # where a large exponent does not yet overflow the powers of the distances;
 # typed values beyond the arrows' range are allowed, the model checks them
 KNOBS = {
+    Balloon: [
+        ('spread', "Spread", 0, 0.1, 10),
+    ],
     PowerLaw: [
         ('strength', "Strength", 0, 0.1, 10),
         ('exponent', "Exponent", 0.1, 0.1, 10),

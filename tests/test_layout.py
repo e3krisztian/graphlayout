@@ -4,10 +4,14 @@ import numpy as np
 import pytest
 
 from layout import (
-    EDGE_LENGTH, JITTER, BALLOON, DENSE, STRESS,
+    EDGE_LENGTH, JITTER, BALLOON, DENSE, STRESS, Balloon,
     GraphLayout, PowerLaw, Stress, attraction, hop_counts, improved, jitter_due, jittered, randomized_layout, step_move_limit,
     toggle_pin,
 )
+
+
+# the forces BALLOON had before its strength was scaled to the graph
+TWO_OVER_D = PowerLaw(strength=2, exponent=1)
 
 
 def two_node_layout(distance):
@@ -108,7 +112,7 @@ def test_energy_of_a_stretched_edge():
 
 
 def test_energy_of_unconnected_nodes_is_the_repulsion_energy():
-    layout = GraphLayout([[], []], [[0, 0], [3, 4]])
+    layout = GraphLayout([[], []], [[0, 0], [3, 4]], model=TWO_OVER_D)
     assert layout.energy == pytest.approx(-2 * math.log(5))
 
 
@@ -148,11 +152,48 @@ def test_layouts_are_balloon_by_default():
     assert two_node_layout(EDGE_LENGTH).model == BALLOON
 
 
-def test_balloon_pushes_with_2_over_d_and_has_the_energy_minus_2_ln_d():
-    layout = GraphLayout([[], []], [[0, 0], [3, 4]], model=BALLOON)
+def test_two_over_d_pushes_with_2_over_d_and_has_the_energy_minus_2_ln_d():
+    layout = GraphLayout([[], []], [[0, 0], [3, 4]], model=TWO_OVER_D)
     # 2/5, along the unit vector [3, 4] / 5
     assert layout.delta[1].tolist() == pytest.approx([2/5 * 3/5, 2/5 * 4/5])
     assert layout.energy == pytest.approx(-2 * math.log(5))
+
+
+def test_balloon_is_the_1_over_d_power_law_with_spread_times_edges_over_pairs_strength():
+    # 3 nodes, 2 edges, 3 pairs
+    layout = path_layout().with_model(Balloon(spread=3))
+    assert layout.field.law == PowerLaw(strength=3 * 2 / 3, exponent=1)
+    assert layout.model == Balloon(spread=3)
+
+
+@pytest.mark.parametrize('edges', [[[]], [[], []]])
+def test_balloon_does_not_push_without_edges(edges):
+    layout = GraphLayout(edges, [[i, 0] for i in range(len(edges))], model=BALLOON)
+    assert layout.field.law.strength == 0
+
+
+def test_balloon_settles_with_the_mean_of_d_times_d_minus_edge_length_at_2_edge_length_spread():
+    # a star of 8 leaves and a path of 3 behind one of them: 12 nodes, 11 edges
+    edges = [[1, 2, 3, 4, 5, 6, 7, 8], *[[0] for _ in range(7)], [0, 9], [8, 10], [9, 11], [10]]
+    np.random.seed(0)
+    layout = GraphLayout(edges, np.random.random((12, 2)) * 10, model=Balloon(spread=1.5))
+    for _ in range(500):
+        layout = improved(layout)
+    assert layout.tension < 1e-3
+    lengths = np.array([
+        np.linalg.norm(layout.locations[node] - layout.locations[other])
+        for node, neighbours in enumerate(edges) for other in neighbours if node < other])
+    assert np.mean(lengths * (lengths - EDGE_LENGTH)) == pytest.approx(2 * EDGE_LENGTH * 1.5, rel=1e-3)
+
+
+def test_balloon_accepts_spread_0():
+    Balloon(spread=0)
+
+
+@pytest.mark.parametrize('spread', [-1, math.nan, math.inf])
+def test_balloon_rejects_broken_constraints_naming_the_knob(spread):
+    with pytest.raises(ValueError, match='^spread: '):
+        Balloon(spread=spread)
 
 
 def test_dense_pushes_with_1_over_d_squared_and_has_the_energy_1_over_d_minus_1():
@@ -230,9 +271,9 @@ def test_improved_does_not_raise_the_energy_when_a_checked_step_lowers_it(seed):
 
 def test_improved_takes_a_step_that_lowers_the_energy_but_raises_the_tension():
     # every step improved tries along delta raises the tension of this layout,
-    # found for the forces of BALLOON
+    # found for the forces of TWO_OVER_D
     layout = GraphLayout(
-        [[1], [0, 2], [1]], [[2.0, 2.9], [0.2, 0.9], [4.9, 4.1]], model=BALLOON)
+        [[1], [0, 2], [1]], [[2.0, 2.9], [0.2, 0.9], [4.9, 4.1]], model=TWO_OVER_D)
     assert layout.step(1 / 16).tension > layout.tension
     improved_layout = improved(layout)
     assert improved_layout.energy < layout.energy
@@ -280,7 +321,7 @@ def nearly_overlapping_layout(model):
         [[1], [0, 2], [1]], [[2.39, 3.87], [0.94, 3.5], [2.38, 3.87]], model=model)
 
 
-@pytest.mark.parametrize('model', [BALLOON, DENSE])
+@pytest.mark.parametrize('model', [TWO_OVER_D, DENSE])
 def test_improved_lowers_the_energy_of_nearly_overlapping_nodes(model):
     layout = nearly_overlapping_layout(model)
     # the earlier search stopped at 1/16 of delta, which overshoots
@@ -288,7 +329,7 @@ def test_improved_lowers_the_energy_of_nearly_overlapping_nodes(model):
     assert improved(layout).energy < layout.energy
 
 
-@pytest.mark.parametrize('model', [BALLOON, DENSE])
+@pytest.mark.parametrize('model', [TWO_OVER_D, BALLOON, DENSE])
 def test_improved_moves_no_node_farther_than_the_step_move_limit(model):
     layout = nearly_overlapping_layout(model)
     moves = np.linalg.norm(improved(layout).locations - layout.locations, axis=1)

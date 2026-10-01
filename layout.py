@@ -115,22 +115,24 @@ class PowerLaw:
         return pair_energies.sum() / 2
 
     def bound_to(self, edges):
-        return PowerLawField(self, edges)
+        return PowerLawField(self, self, edges)
 
 
 class PowerLawField:
     '''
-        a PowerLaw bound to a graph: springs along the edges, and the repulsion between every pair
+        a model bound to a graph: springs along the edges, and the repulsion of a PowerLaw,
+        the law, between every pair
     '''
-    def __init__(self, model, edges):
+    def __init__(self, model, law, edges):
         self.model = model
+        self.law = law
         self.edges = edges
 
     def delta_and_energy(self, locations):
         '''
             forces: the negative gradient of the energy
             energy: sum over edges of (d - EDGE_LENGTH)**2 / (4 * EDGE_LENGTH)
-                plus the model's repulsion energy
+                plus the law's repulsion energy
         '''
         assert_locations_shape(locations, length=len(self.edges))
         edges = self.edges
@@ -151,15 +153,46 @@ class PowerLawField:
             # distance turns its force into 0 instead of 0/0 and its energy into
             # that of distance 1, which is 0
             distances[node] = 1
-            repulsion = self.model.repulsion(loc_deltas, distances)
-            energy += self.model.energy(distances)
+            repulsion = self.law.repulsion(loc_deltas, distances)
+            energy += self.law.energy(distances)
 
             forces[node] = pull + repulsion
         return forces, energy
 
 
+@dataclasses.dataclass(frozen=True)
+class Balloon:
+    '''
+        repulsion between every pair of nodes, fading with 1/d, its strength scaled to the graph
+    '''
+    # how far the edges are stretched: at rest the mean over the edges of
+    # d * (d - EDGE_LENGTH) is 2 * EDGE_LENGTH * spread, whatever the size of the graph;
+    # 0 or more
+    spread: float
+
+    def __post_init__(self):
+        # written so that nan breaks the constraint
+        if not (math.isfinite(self.spread) and self.spread >= 0):
+            raise ValueError('spread: a number, 0 or more')
+
+    def bound_to(self, edges):
+        '''
+            the 1/d PowerLaw with the strength spread * m / P, for m edges and P node pairs;
+            at rest the springs and the repulsion balance:
+            sum over edges of d * (d - EDGE_LENGTH) / (2 * EDGE_LENGTH) = strength * P,
+            as every pair adds d * strength / d to the right side;
+            with a fixed strength the edges would grow with the size of the graph
+        '''
+        nodecount = len(edges)
+        pairs = nodecount * (nodecount - 1) / 2
+        # every edge is listed at both of its ends
+        edgecount = sum(len(neighbours) for neighbours in edges) / 2
+        strength = self.spread * edgecount / pairs if pairs > 0 else 0.0
+        return PowerLawField(self, PowerLaw(strength=strength, exponent=1), edges)
+
+
 # 1/d reaches far: it inflates meshes from the inside, giving wireframe bodies a 3D look
-BALLOON = PowerLaw(strength=2, exponent=1)
+BALLOON = Balloon(spread=2)
 # 1/d**2 acts close: it spreads trees into clean branches, but converges slowly
 DENSE = PowerLaw(strength=1, exponent=2)
 

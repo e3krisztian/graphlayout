@@ -6,7 +6,7 @@ from app import (
     GraphCanvas, KNOBS, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, centered_position,
     model_with_knob, preset_name,
 )
-from layout import EDGE_LENGTH, BALLOON, DENSE, STRESS, GraphLayout, PowerLaw
+from layout import EDGE_LENGTH, BALLOON, DENSE, STRESS, Balloon, GraphLayout, PowerLaw
 from themes import DARK, LIGHT
 
 
@@ -175,10 +175,11 @@ def test_pinned_label_boxes_have_the_pinned_outline(labels):
 
 
 def test_model_with_knob_sets_the_field_from_text_and_keeps_the_other():
-    assert model_with_knob(BALLOON, 'strength', ' 1.5 ') == (
-        PowerLaw(strength=1.5, exponent=BALLOON.exponent), None)
-    assert model_with_knob(BALLOON, 'exponent', '2.5') == (
-        PowerLaw(strength=BALLOON.strength, exponent=2.5), None)
+    assert model_with_knob(DENSE, 'strength', ' 1.5 ') == (
+        PowerLaw(strength=1.5, exponent=DENSE.exponent), None)
+    assert model_with_knob(DENSE, 'exponent', '2.5') == (
+        PowerLaw(strength=DENSE.strength, exponent=2.5), None)
+    assert model_with_knob(BALLOON, 'spread', '3') == (Balloon(spread=3), None)
 
 
 @pytest.mark.parametrize('field, text, message', [
@@ -192,7 +193,7 @@ def test_model_with_knob_sets_the_field_from_text_and_keeps_the_other():
     ('exponent', 'nan', 'exponent: a number above 0'),
 ])
 def test_model_with_knob_rejects_text_breaking_the_constraint(field, text, message):
-    assert model_with_knob(BALLOON, field, text) == (None, message)
+    assert model_with_knob(DENSE, field, text) == (None, message)
 
 
 def test_preset_name_names_the_presets():
