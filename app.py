@@ -15,7 +15,7 @@ from graphs import (
     eiffel_tower_front,
     tetrahedron, cube, octahedron, dodecahedron, icosahedron)
 from layout import (
-    X, Y, NODES, COORDINATES, BALLOON, DENSE,
+    X, Y, NODES, COORDINATES, BALLOON, DENSE, STRESS, PowerLaw, Stress,
     GraphLayout, circle_locations, randomized, randomized_layout, toggle_pin,
     improved, jitter_due, jittered,
 )
@@ -129,8 +129,8 @@ class GraphCanvas:
         lengths = [math.dist(p1, p2) for p1, p2 in lines]
         if not lengths:
             return
-        # colored relative to the median edge, as repulsion keeps all edges
-        # longer than EDGE_LENGTH even in a settled layout
+        # colored relative to the median edge, as the repulsion of a power law keeps
+        # all edges longer than EDGE_LENGTH even in a settled layout
         # (at least a pixel, for when most nodes are on top of each other)
         reference = max(statistics.median(lengths), 1)
         for ((x1, y1), (x2, y2)), length in zip(lines, lengths):
@@ -275,7 +275,22 @@ CUSTOM = "Custom"
 PRESETS = [
     ("Balloon (1/d)", BALLOON),
     ("Dense (1/d²)", DENSE),
+    ("Stress (hops)", STRESS),
 ]
+
+# model type: [(field, label, lowest arrow value, increment, highest arrow value)];
+# no knob has a natural upper bound: the arrows stop well above the presets,
+# where a large exponent does not yet overflow the powers of the distances;
+# typed values beyond the arrows' range are allowed, the model checks them
+KNOBS = {
+    PowerLaw: [
+        ('strength', "Strength", 0, 0.1, 10),
+        ('exponent', "Exponent", 0.1, 0.1, 10),
+    ],
+    Stress: [
+        ('weight_exponent', "Weight exponent", 0, 0.1, 10),
+    ],
+}
 
 
 def preset_name(model):
@@ -374,7 +389,7 @@ class App:
         # the last choice of drawing the labels, for graphs that start with labels
         self.label_order = LABELS_ABOVE
         self.pipe_parameters = (10, 10, False)
-        # the repulsion of new layouts, and of the current one
+        # the model of the forces of new layouts, and of the current one
         self.model = BALLOON
         # written to end the wait for events while the animation is stopped
         self.wakeup = tkinter.IntVar()
@@ -421,7 +436,7 @@ class App:
         tkinter.Button(self.toolbar, text="Step", command=self.step).pack(side=tkinter.LEFT)
         tkinter.Button(self.toolbar, text="Unpin all", command=self.unpin_all).pack(
             side=tkinter.LEFT)
-        self.create_repulsion_group()
+        self.create_forces_group()
         for name, graphs in reversed(GRAPH_GROUPS):
             buttons = [
                 (text, lambda create_graph=create_graph: self.new_graph(create_graph()))
@@ -435,38 +450,50 @@ class App:
                 tkinter.Button(group, text=text, command=command).grid(
                     row=i // columns, column=i % columns, sticky=tkinter.EW)
 
-    def create_repulsion_group(self):
-        group = tkinter.LabelFrame(self.toolbar, text="Repulsion")
+    def create_forces_group(self):
+        group = tkinter.LabelFrame(self.toolbar, text="Forces")
         group.pack(side=tkinter.LEFT, anchor=tkinter.N, padx=2)
         self.preset = tkinter.StringVar(value=preset_name(self.model))
         tkinter.Label(group, text="Preset").grid(row=0, column=0, sticky=tkinter.E, padx=5)
         tkinter.OptionMenu(
             group, self.preset, *[name for name, model in PRESETS], CUSTOM,
             command=self.preset_selected).grid(row=0, column=1, sticky=tkinter.EW)
-        # field name: (text variable, spinbox, the spinbox's own text colour)
+        self.forces_group = group
+        # field name: (text variable, label, spinbox, the spinbox's own text colour)
         self.knobs = {}
         # field name: the broken constraint of the knob, or None
         self.knob_messages = {}
-        # neither knob has a natural upper bound: the arrows stop at a value well above
-        # the presets, where a large exponent does not yet overflow the powers of the distances;
-        # larger values can still be typed
-        for row, (field, text, minimum, maximum) in enumerate(
-                [('strength', "Strength", 0, 10), ('exponent', "Exponent", 0.1, 10)], start=1):
+        self.knob_message = tkinter.StringVar()
+        self.knob_message_label = tkinter.Label(
+            group, textvariable=self.knob_message, foreground='red')
+        self.create_knobs()
+
+    def create_knobs(self):
+        # the rows of the knobs of the model's type, below the preset menu,
+        # then the message row
+        for variable, label, spinbox, foreground in self.knobs.values():
+            label.destroy()
+            spinbox.destroy()
+        self.knobs = {}
+        self.knob_messages = {}
+        for row, (field, text, minimum, increment, maximum) in enumerate(
+                KNOBS[type(self.model)], start=1):
             variable = tkinter.StringVar(value=getattr(self.model, field))
-            tkinter.Label(group, text=text).grid(row=row, column=0, sticky=tkinter.E, padx=5)
+            label = tkinter.Label(self.forces_group, text=text)
+            label.grid(row=row, column=0, sticky=tkinter.E, padx=5)
             spinbox = tkinter.Spinbox(
-                group, from_=minimum, to=maximum, increment=0.1, textvariable=variable, width=6)
+                self.forces_group, from_=minimum, to=maximum, increment=increment,
+                textvariable=variable, width=6)
             spinbox.grid(row=row, column=1, sticky=tkinter.W, pady=2)
-            self.knobs[field] = (variable, spinbox, spinbox.cget('foreground'))
+            self.knobs[field] = (variable, label, spinbox, spinbox.cget('foreground'))
             self.knob_messages[field] = None
             variable.trace_add('write', lambda *args, field=field: self.knob_changed(field))
-        self.knob_message = tkinter.StringVar()
-        tkinter.Label(group, textvariable=self.knob_message, foreground='red').grid(
-            row=3, column=0, columnspan=2)
+        self.knob_message.set('')
+        self.knob_message_label.grid(row=len(self.knobs) + 1, column=0, columnspan=2)
 
     def knob_changed(self, field):
         # bad text is shown in red, the model keeps the last valid value
-        variable, spinbox, foreground = self.knobs[field]
+        variable, label, spinbox, foreground = self.knobs[field]
         model, message = model_with_knob(self.model, field, variable.get())
         spinbox.configure(foreground=foreground if model is not None else 'red')
         self.knob_messages[field] = message
@@ -479,10 +506,14 @@ class App:
         # Custom is never applied, the menu only shows it for a model matching no preset
         presets = dict(PRESETS)
         if name in presets:
+            new_type = type(presets[name]) is not type(self.model)
             self.set_model(presets[name])
-            # the spinboxes follow, their traces find the model unchanged
-            for field, (variable, spinbox, foreground) in self.knobs.items():
-                variable.set(getattr(self.model, field))
+            if new_type:
+                self.create_knobs()
+            else:
+                # the spinboxes follow, their traces find the model unchanged
+                for field, (variable, label, spinbox, foreground) in self.knobs.items():
+                    variable.set(getattr(self.model, field))
         self.preset.set(preset_name(self.model))
 
     def set_model(self, model):

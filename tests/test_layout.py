@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from layout import (
-    EDGE_LENGTH, JITTER, BALLOON, DENSE,
-    GraphLayout, PowerLaw, improved, jitter_due, jittered, randomized_layout, step_move_limit,
+    EDGE_LENGTH, JITTER, BALLOON, DENSE, STRESS,
+    GraphLayout, PowerLaw, Stress, attraction, hop_counts, improved, jitter_due, jittered, randomized_layout, step_move_limit,
     toggle_pin,
 )
 
@@ -16,15 +16,14 @@ def two_node_layout(distance):
 
 def test_edge_of_ideal_length_does_not_attract():
     layout = two_node_layout(EDGE_LENGTH)
-    attraction = layout.attraction(np.array([[EDGE_LENGTH, 0.]]))
-    assert attraction.tolist() == [0, 0]
+    assert attraction(np.array([[EDGE_LENGTH, 0.]])).tolist() == [0, 0]
 
 
 def test_longer_edge_pulls_towards_the_neighbour():
     layout = two_node_layout(EDGE_LENGTH * 3)
-    attraction = layout.attraction(np.array([[EDGE_LENGTH * 3, 0.]]))
-    assert attraction[0] > 0
-    assert attraction[1] == 0
+    pull = attraction(np.array([[EDGE_LENGTH * 3, 0.]]))
+    assert pull[0] > 0
+    assert pull[1] == 0
 
 
 def path_layout(pinned=None):
@@ -306,3 +305,109 @@ def test_step_move_limit_is_at_least_edge_length():
 
 def test_step_move_limit_of_a_graph_without_edges_is_edge_length():
     assert step_move_limit(GraphLayout([[], []], [[0, 0], [100, 0]])) == EDGE_LENGTH
+
+
+def test_hop_counts_of_a_path():
+    hops = hop_counts([[1], [0, 2], [1, 3], [2]])
+    assert hops[0].tolist() == [0, 1, 2, 3]
+    assert hops[3, 0] == 3
+
+
+def test_hop_counts_of_a_cycle():
+    cycle = [[(i - 1) % 6, (i + 1) % 6] for i in range(6)]
+    assert hop_counts(cycle)[0].tolist() == [0, 1, 2, 3, 2, 1]
+
+
+def test_hop_counts_of_a_star():
+    hops = hop_counts([[1, 2, 3], [0], [0], [0]])
+    assert hops[1].tolist() == [1, 0, 2, 2]
+
+
+def test_hop_counts_across_components_are_one_more_than_the_longest_within():
+    # edges 0-1 and 2-3
+    hops = hop_counts([[1], [0], [3], [2]])
+    assert hops.tolist() == [[0, 1, 2, 2], [1, 0, 2, 2], [2, 2, 0, 1], [2, 2, 1, 0]]
+
+
+def test_hop_counts_of_a_graph_without_edges_are_1():
+    assert hop_counts([[], [], []]).tolist() == [[0, 1, 1], [1, 0, 1], [1, 1, 0]]
+
+
+def test_hop_counts_ignore_duplicate_edges_and_self_loops():
+    assert hop_counts([[1, 1], [0, 0, 1, 2], [1]]).tolist() == hop_counts(
+        [[1], [0, 2], [1]]).tolist()
+
+
+def test_stress_energy_of_neighbours_is_the_spring_energy():
+    d = EDGE_LENGTH + 3
+    layout = GraphLayout([[1], [0]], [[0, 0], [d, 0]], model=STRESS)
+    assert layout.energy == pytest.approx((d - EDGE_LENGTH) ** 2 / (4 * EDGE_LENGTH))
+
+
+def test_stress_energy_of_a_pair_two_hops_apart():
+    # path 0-1-2 with ideal edges, 0 and 2 at distance d
+    d = 3
+    layout = GraphLayout([[1], [0, 2], [1]], [[0, 0], [1.5, 1.32287565553], [d, 0]], model=STRESS)
+    # weight 2**-2 and rest length 2 * EDGE_LENGTH for the pair 0-2
+    assert layout.energy == pytest.approx(
+        (1 / 4) * (d - 2 * EDGE_LENGTH) ** 2 / (4 * EDGE_LENGTH), abs=1e-9)
+
+
+def two_component_layout(model):
+    # path 0-1-2 and edge 3-4
+    return GraphLayout(
+        [[1], [0, 2], [1], [4], [3]], [[0, 0], [3, 1], [5, 4], [1, 7], [6, 6]], model=model)
+
+
+@pytest.mark.parametrize('weight_exponent', [0, 1, 2])
+@pytest.mark.parametrize('make_layout', [
+    lambda model: path_layout().with_model(model),
+    two_component_layout,
+])
+def test_stress_delta_is_the_negative_gradient_of_the_energy(weight_exponent, make_layout):
+    layout = make_layout(Stress(weight_exponent=weight_exponent))
+    h = 1e-6
+    for node in range(len(layout.locations)):
+        for axis in range(2):
+            locations = layout.locations.copy()
+            locations[node, axis] += h
+            gradient = (layout.moved(locations).energy - layout.energy) / h
+            assert -gradient == pytest.approx(layout.delta[node, axis], abs=1e-4)
+
+
+def test_stress_of_nodes_on_the_same_spot_is_finite():
+    layout = GraphLayout([[1], [0, 2], [1]], [[0, 0], [0, 0], [3, 0]], model=STRESS)
+    assert math.isfinite(layout.energy)
+    assert np.isfinite(layout.delta).all()
+
+
+def test_stress_accepts_a_weight_exponent_of_0():
+    assert Stress(weight_exponent=0).weight_exponent == 0
+
+
+@pytest.mark.parametrize('weight_exponent', [-0.1, math.nan, math.inf])
+def test_stress_rejects_weight_exponents_breaking_its_constraint(weight_exponent):
+    with pytest.raises(ValueError, match='weight exponent'):
+        Stress(weight_exponent=weight_exponent)
+
+
+@pytest.mark.parametrize('derive', [
+    lambda layout: layout.step(0.5),
+    lambda layout: layout.pinned_at(1, [3, 4]),
+    lambda layout: layout.unpinned(0),
+    lambda layout: layout.unpinned_all(),
+    lambda layout: randomized_layout(layout),
+    lambda layout: toggle_pin(layout, 2),
+    lambda layout: toggle_pin(layout, 0),
+    lambda layout: jittered(layout),
+])
+def test_derived_layouts_reuse_the_field(derive):
+    layout = path_layout([True, False, False]).with_model(STRESS)
+    assert derive(layout).field is layout.field
+
+
+def test_with_model_binds_the_new_model():
+    layout = path_layout().with_model(STRESS)
+    changed = layout.with_model(DENSE)
+    assert changed.field is not layout.field
+    assert changed.field.model == DENSE

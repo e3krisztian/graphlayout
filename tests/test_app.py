@@ -1,10 +1,12 @@
+import dataclasses
+
 import pytest
 
 from app import (
-    GraphCanvas, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, centered_position,
+    GraphCanvas, KNOBS, LABELS_ABOVE, LABELS_BELOW, LABELS_OFF, centered_position,
     model_with_knob, preset_name,
 )
-from layout import EDGE_LENGTH, BALLOON, DENSE, GraphLayout, PowerLaw
+from layout import EDGE_LENGTH, BALLOON, DENSE, STRESS, GraphLayout, PowerLaw
 from themes import DARK, LIGHT
 
 
@@ -196,7 +198,14 @@ def test_model_with_knob_rejects_text_breaking_the_constraint(field, text, messa
 def test_preset_name_names_the_presets():
     assert preset_name(BALLOON) == "Balloon (1/d)"
     assert preset_name(DENSE) == "Dense (1/d²)"
+    assert preset_name(STRESS) == "Stress (hops)"
 
 
 def test_preset_name_is_custom_for_other_models():
     assert preset_name(PowerLaw(strength=2, exponent=1.5)) == "Custom"
+
+
+@pytest.mark.parametrize('model_type', list(KNOBS))
+def test_knobs_list_the_fields_of_the_model(model_type):
+    fields = [field.name for field in dataclasses.fields(model_type)]
+    assert [knob[0] for knob in KNOBS[model_type]] == fields

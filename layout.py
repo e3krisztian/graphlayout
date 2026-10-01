@@ -2,6 +2,7 @@
 
 import dataclasses
 import math
+from collections import deque
 
 import numpy as np
 
@@ -27,6 +28,30 @@ def assert_locations_shape(array, *, length=None):
 
 def assert_point_shape(array):
     assert array.shape == (2,)
+
+
+def attraction(loc_deltas):
+    '''
+        the (2,) pull of the edge springs on a node, from the (k, 2) loc_deltas to its neighbours
+    '''
+    assert_locations_shape(loc_deltas)
+    distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
+    distances_column = np.expand_dims(distances, axis=COORDINATES)
+    # a neighbour on the same spot has no direction: its 0/0 is dropped by nansum
+    with np.errstate(invalid='ignore'):
+        attractions = (
+            (distances_column - EDGE_LENGTH) * loc_deltas
+            / (2 * distances_column * EDGE_LENGTH)
+        )
+    result = np.nansum(attractions, axis=NODES)
+    assert_point_shape(result)
+    return result
+
+
+# A model is a frozen dataclass of knobs; its bound_to(edges) gives a field: the model
+# bound to one graph, holding what is computed once per graph.
+# field.delta_and_energy(locations) gives the (n, 2) forces on the nodes and the energy,
+# the forces being the negative gradient of the energy; fields know nothing of pins.
 
 
 @dataclasses.dataclass(frozen=True)
@@ -89,11 +114,142 @@ class PowerLaw:
         # every pair is seen from both of its nodes, hence the halving
         return pair_energies.sum() / 2
 
+    def bound_to(self, edges):
+        return PowerLawField(self, edges)
+
+
+class PowerLawField:
+    '''
+        a PowerLaw bound to a graph: springs along the edges, and the repulsion between every pair
+    '''
+    def __init__(self, model, edges):
+        self.model = model
+        self.edges = edges
+
+    def delta_and_energy(self, locations):
+        '''
+            forces: the negative gradient of the energy
+            energy: sum over edges of (d - EDGE_LENGTH)**2 / (4 * EDGE_LENGTH)
+                plus the model's repulsion energy
+        '''
+        assert_locations_shape(locations, length=len(self.edges))
+        edges = self.edges
+        forces = np.zeros_like(locations)
+        energy = 0.0
+
+        for node, location in enumerate(locations):
+            loc_deltas = locations - location
+            distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
+
+            # calculate attraction - along the edges
+            pull = attraction(loc_deltas[edges[node]])
+            # every edge is seen from both of its ends, hence 8 instead of 4
+            energy += ((distances[edges[node]] - EDGE_LENGTH) ** 2).sum() / (8 * EDGE_LENGTH)
+
+            # calculate repulsion - an effect of all other nodes
+            # loc_deltas[node] is the node's delta to itself, [0, 0]: a non-zero
+            # distance turns its force into 0 instead of 0/0 and its energy into
+            # that of distance 1, which is 0
+            distances[node] = 1
+            repulsion = self.model.repulsion(loc_deltas, distances)
+            energy += self.model.energy(distances)
+
+            forces[node] = pull + repulsion
+        return forces, energy
+
 
 # 1/d reaches far: it inflates meshes from the inside, giving wireframe bodies a 3D look
 BALLOON = PowerLaw(strength=2, exponent=1)
 # 1/d**2 acts close: it spreads trees into clean branches, but converges slowly
 DENSE = PowerLaw(strength=1, exponent=2)
+
+
+@dataclasses.dataclass(frozen=True)
+class Stress:
+    '''
+        a spring between every pair of nodes, its rest length the hop count of the pair
+        times EDGE_LENGTH (Kamada-Kawai); it replaces both the edge springs and the repulsion
+    '''
+    # how much distant pairs count: a pair h hops apart has the weight h**-weight_exponent;
+    # 0 makes every pair count the same, 2 (the usual Kamada-Kawai choice) lets
+    # the nearby structure dominate;
+    # 0 or more
+    weight_exponent: float
+
+    def __post_init__(self):
+        # written so that nan breaks the constraint
+        if not (math.isfinite(self.weight_exponent) and self.weight_exponent >= 0):
+            raise ValueError('weight exponent: a number, 0 or more')
+
+    def bound_to(self, edges):
+        return StressField(self, edges)
+
+
+# every pair is held at its hop count times EDGE_LENGTH, so trees and meshes keep their shape
+STRESS = Stress(weight_exponent=2)
+
+
+def hop_counts(edges):
+    '''
+        the (n, n) int array of the hop counts between the nodes, by a breadth-first search
+        from every node; pairs in different components get one more than the longest
+        hop count within a component, 1 in a graph without edges
+    '''
+    n = len(edges)
+    neighbours = [
+        sorted(set(int(other) for other in edges[node] if other != node)) for node in range(n)]
+    hops = np.full((n, n), -1, dtype=np.int64)
+    for source in range(n):
+        row = [-1] * n
+        row[source] = 0
+        queue = deque([source])
+        while queue:
+            node = queue.popleft()
+            for other in neighbours[node]:
+                if row[other] < 0:
+                    row[other] = row[node] + 1
+                    queue.append(other)
+        hops[source] = row
+    unreachable = hops < 0
+    if unreachable.any():
+        hops[unreachable] = hops.max() + 1
+    return hops
+
+
+class StressField:
+    '''
+        a Stress bound to a graph, holding its (n, n) rest lengths and weights
+    '''
+    def __init__(self, model, edges):
+        self.model = model
+        hops = hop_counts(edges)
+        off_diagonal = ~np.eye(len(edges), dtype=bool)
+        self.rest_lengths = hops * EDGE_LENGTH
+        # the diagonal, a node with itself, has no weight
+        self.weights = np.zeros(hops.shape)
+        self.weights[off_diagonal] = hops[off_diagonal] ** -float(model.weight_exponent)
+
+    def delta_and_energy(self, locations):
+        '''
+            forces: the negative gradient of the energy
+            energy: sum over pairs of weights * (d - rest_lengths)**2 / (4 * EDGE_LENGTH)
+        '''
+        assert_locations_shape(locations, length=len(self.weights))
+        # (n, n) coordinate deltas from node i (row) to node j (column)
+        x_deltas = locations[:, X] - np.expand_dims(locations[:, X], axis=1)
+        y_deltas = locations[:, Y] - np.expand_dims(locations[:, Y], axis=1)
+        distances = np.hypot(x_deltas, y_deltas)
+        stretches = distances - self.rest_lengths
+        # every pair is seen from both of its nodes, hence the halving
+        energy = (self.weights * stretches ** 2).sum() / 2 / (4 * EDGE_LENGTH)
+        # the pull along each pair per unit of coordinate delta; a pair on the same spot
+        # has no direction: its 0/0 is dropped
+        with np.errstate(invalid='ignore', divide='ignore'):
+            pulls = self.weights * stretches / (2 * EDGE_LENGTH * distances)
+        pulls[~np.isfinite(pulls)] = 0
+        forces = np.stack(
+            [(pulls * x_deltas).sum(axis=1), (pulls * y_deltas).sum(axis=1)], axis=COORDINATES)
+        return forces, energy
 
 
 def circle_locations(nodecount):
@@ -112,7 +268,7 @@ def randomized(locations):
 
 
 class GraphLayout:
-    def __init__(self, edges, locations, pinned=None, model=BALLOON):
+    def __init__(self, edges, locations, pinned=None, model=BALLOON, field=None):
         assert len(edges) == len(locations)
         self.edges = [np.array(nodeindices, dtype=np.int64) for nodeindices in edges]
         self.locations = np.array(locations, dtype=np.float64)
@@ -122,10 +278,17 @@ class GraphLayout:
             pinned = np.zeros(len(edges), dtype=bool)
         self.pinned = np.array(pinned, dtype=bool)
         assert self.pinned.shape == (len(edges),)
-        # the repulsion between the nodes, e.g. a PowerLaw
-        self.model = model
+        # the model bound to the graph, computing the forces and the energy;
+        # given by the layouts derived from this one, so it is bound once per graph
+        if field is None:
+            field = model.bound_to(self.edges)
+        self.field = field
         self.delta, self.energy = self.calculate_delta_and_energy()
         self.tension = self.calculate_tension()
+
+    @property
+    def model(self):
+        return self.field.model
 
     def __str__(self):
         return 'Graph: ' + str(self.edges) + '\n' + 'Layout: ' + str(self.locations)
@@ -137,54 +300,14 @@ class GraphLayout:
         '''
             delta: the forces on the nodes
             energy: the potential of these forces, delta is its negative gradient,
-                so a small enough step along delta always lowers it:
-                sum over edges of (d - EDGE_LENGTH)**2 / (4 * EDGE_LENGTH)
-                plus the model's repulsion energy
+                so a small enough step along delta always lowers it
         '''
-        locations = self.locations
-        assert_locations_shape(locations, length=len(self.edges))
-        edges = self.edges
-        delta = [None] * len(locations)
-        energy = 0.0
-
-        for node, location in enumerate(locations):
-            loc_deltas = locations - location
-            distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
-
-            # calculate attraction - along the edges
-            attraction = self.attraction(loc_deltas[edges[node]])
-            # every edge is seen from both of its ends, hence 8 instead of 4
-            energy += ((distances[edges[node]] - EDGE_LENGTH) ** 2).sum() / (8 * EDGE_LENGTH)
-
-            # calculate repulsion - an effect of all other nodes
-            # loc_deltas[node] is the node's delta to itself, [0, 0]: a non-zero
-            # distance turns its force into 0 instead of 0/0 and its energy into
-            # that of distance 1, which is 0
-            distances[node] = 1
-            repulsion = self.model.repulsion(loc_deltas, distances)
-            energy += self.model.energy(distances)
-
-            # set the new location
-            delta[node] = attraction + repulsion
-        result = np.array(delta, dtype=np.float64)
+        forces, energy = self.field.delta_and_energy(self.locations)
+        result = np.array(forces, dtype=np.float64)
         assert_locations_shape(result, length=len(self.edges))
         # pinned nodes do not move, and their unrelievable forces are left out of the tension
         result[self.pinned] = 0
         return result, energy
-
-    def attraction(self, loc_deltas):
-        assert_locations_shape(loc_deltas)
-        distances = np.linalg.norm(loc_deltas, axis=COORDINATES)
-        distances_column = np.expand_dims(distances, axis=COORDINATES)
-        # a neighbour on the same spot has no direction: its 0/0 is dropped by nansum
-        with np.errstate(invalid='ignore'):
-            attractions = (
-                (distances_column - EDGE_LENGTH) * loc_deltas
-                / (2 * distances_column * EDGE_LENGTH)
-            )
-        result = np.nansum(attractions, axis=NODES)
-        assert_point_shape(result)
-        return result
 
     def moved(self, locations, pinned=None):
         '''
@@ -193,7 +316,7 @@ class GraphLayout:
         '''
         if pinned is None:
             pinned = self.pinned
-        return GraphLayout(self.edges, locations, pinned, self.model)
+        return GraphLayout(self.edges, locations, pinned, field=self.field)
 
     def with_model(self, model):
         '''
