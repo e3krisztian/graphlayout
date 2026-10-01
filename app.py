@@ -268,10 +268,11 @@ class PipeDialog:
         self.window.destroy()
 
 
-# (start menu entry, the (n, 2) locations a graph starts from, given its edges)
+# (start menu entry, the (n, 2) locations a graph starts from, given its edges);
+# the app starts on the first one
 STARTS = [
-    ("Random", lambda edges: randomized(circle_locations(len(edges)))),
     ("Bubble tree", bubble_tree_locations),
+    ("Random", lambda edges: randomized(circle_locations(len(edges)))),
 ]
 
 
@@ -406,7 +407,7 @@ class App:
         # the start menu's entry for the locations of new layouts
         self.start = tkinter.StringVar(value=STARTS[0][0])
         # the model of the forces of new layouts, and of the current one
-        self.model = INFLATE
+        self.model = STRESS
         # written to end the wait for events while the animation is stopped
         self.wakeup = tkinter.IntVar()
         self.animating = True
